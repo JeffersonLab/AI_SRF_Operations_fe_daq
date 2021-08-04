@@ -294,13 +294,13 @@ class LinacFactory:
             if self.testing:
                 prefix = "adamc:"
 
-            logger.debug(f"Adding {name} to {linac.name}'s electrometers")
+            logger.info(f"Adding {name} to {linac.name}'s electrometers")
             ndxe = NDXElectrometer(name=name, epics_name=f"{prefix}{name}")
             linac.ndx_electrometers[name] = ndxe
             for d in p['Detectors'].values():
                 if len(d) > 0:
                     if detector_names is None or d in detector_names:
-                        logger.debug(f"Adding {name} to {linac.name}'s NDX detectors")
+                        logger.info(f"Adding {name} to {linac.name}'s NDX detectors")
                         linac.ndx_detectors[d] = NDXDetector(name=d, epics_name=f"{prefix}{d}", electrometer=ndxe)
 
     @staticmethod
