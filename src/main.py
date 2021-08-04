@@ -5,7 +5,8 @@ from linac import LinacFactory
 
 import procedures
 
-logging.basicConfig(level=logging.DEBUG, format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+# logging.DEBUG for gory details on linac operations.  LOTS of data.
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
 logger = logging.getLogger(__name__)
 
 
