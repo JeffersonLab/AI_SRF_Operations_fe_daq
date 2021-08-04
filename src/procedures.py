@@ -257,19 +257,21 @@ def scan_cavity_gradient(cavity: Cavity, zone: Zone, linac: Linac, avg_time: flo
             for z_level in zone_levels:
                 for l_level in linac_levels:
                     try:
-                        logger.debug("Setting gradients")
+                        logger.info("Setting gradients")
                         cavity.set_gradient(gset_base + gset_step_size * i)
-                        logger.debug("Setting zone gradients")
+                        logger.info("Setting zone gradients")
                         zone.set_gradients(exclude_cavs=[cavity], level=z_level)
-                        logger.debug("Setting linac gradients")
+                        logger.info("Setting linac gradients")
                         linac.set_gradients(exclude_cavs=[cavity], exclude_zones=[zone], level=l_level)
-                        logger.debug("Setting linac phases")
+                        logger.info("Setting linac phases")
                         linac.jiggle_psets(5.0)
 
                         # If we're given a settle time, then sleep in small increments until that time is up.  Channel
                         # Access should be running in a different thread, but documentation was hazy about if this was
                         # needed.  This also checks the state of the control system and throws if there is a problem.
+                        logger.info(f"Waiting on settle time ({settle_time} seconds)")
                         settle_start, settle_end = StateMonitor.monitor(duration=settle_time)
+                        logger.info(f"Waiting on averaging time ({avg_time} seconds)")
                         avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
 
                         # Write out sample time to file
