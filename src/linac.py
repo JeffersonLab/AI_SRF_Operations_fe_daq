@@ -146,12 +146,14 @@ class Linac:
             ndxd.update_background()
 
     def set_ndx_for_fe_onset(self):
+        logger.info(f"{self.name} setting NDXElectrometers for FE onset")
         for ndxe in self.ndx_electrometers.values():
             ndxe.set_for_fe_onset()
 
     def set_ndx_for_operations(self):
+        logger.info(f"{self.name} setting NDXElectrometers for operations")
         for ndxe in self.ndx_electrometers.values():
-            ndxe.set_for_operaitons()
+            ndxe.set_for_operations()
 
     def is_radiation_above_background(self, t_stat_threshold: float = 5) -> Tuple[bool, float]:
         """Check all fo the NDX detectors for sign of radiation.
