@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> int:
-    logger.debug("Starting main")
+    logger.info("Starting main")
 
     parser = argparse.ArgumentParser(description='Run data collection for Cavity Field Emission project')
     parser.add_argument('-z', '--zone', help='The primary zone to test', required=True)
@@ -45,7 +45,7 @@ def main() -> int:
             logger.info("Running in test mode")
 
         # Setup the Linac and Zone objects for the task at hand
-        logger.debug("Creating linac")
+        logger.info("Creating linac")
         linac = LinacFactory(testing=testing).create_linac(name=linac_name, zone_names=linac_zones,
                                                            detector_names=detector_names)
         if zone_name not in linac.zones.keys():
