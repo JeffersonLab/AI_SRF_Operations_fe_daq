@@ -1,0 +1,48 @@
+#!/bin/bash
+
+livePlot -load srf-fe-ai-daq-test &
+exit
+
+for suf in GSET PSET
+do
+  pvs=""
+  for l in 1 
+  do
+    for z in M
+    do
+      for c in 1 2 3 4 5 6 7 8
+      do
+        pvs="$pvs adamc:R${l}${z}${c}${suf}"
+      done
+    done
+  done
+  livePlot -channels $pvs &
+done
+
+for suf in GSET PSET
+do
+  pvs=""
+  for l in 1 
+  do
+    for z in 2 3 4 5 6 7 8 9 A B C D E F G H I J K L N O P Q
+    do
+      for c in 1
+      do
+        pvs="$pvs adamc:R${l}${z}${c}${suf}"
+      done
+    done
+  done
+  livePlot -channels $pvs &
+done
+
+for suf in _gCur
+do
+  pvs=""
+  for id in 1L05 1L06 1L07 1L08 1L22 1L23 1L24 1L25 1L26
+  do
+    pvs="$pvs adamc:INX${id}${suf}"
+  done
+  livePlot -channels $pvs &
+done
+
+

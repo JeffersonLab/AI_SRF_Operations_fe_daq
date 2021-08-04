@@ -1,0 +1,27 @@
+# NDX detector PVs
+
+# E.g., D1 = INX1L04, D2 = INX1L05
+record(ao, "adamc:$(D1)_nCur") {
+}
+record(ao, "adamc:$(D1)_gCur") {
+}
+record(ao, "adamc:$(D2)_nCur") {
+}
+record(ao, "adamc:$(D2)_gCur") {
+}
+
+# E.g., E = NDXNL05
+record(ao, "adamc:$(E)_RESET") {
+}
+record(ao, "adamc:$(E)_CAPACITOR_SW") {
+}
+record(ao, "adamc:$(E)_PERIOD") {
+}
+record(ao, "adamc:$(E)_HV_BIAS") {
+    field(VAL, 1000)
+    field(PINI, "TRUE")
+}
+record(ao, "adamc:$(E)_HV_RBCK") {
+    field(VAL, 975)
+    field(PINI, "TRUE")
+}
