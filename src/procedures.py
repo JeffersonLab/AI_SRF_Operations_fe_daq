@@ -1,12 +1,11 @@
 import logging
-import traceback
 import time
 from datetime import datetime
 from operator import attrgetter
 from typing import List
 
 from cavity import Cavity
-from linac import LinacFactory, Zone, Linac
+from linac import Zone, Linac
 from state_monitor import StateMonitor
 
 logger = logging.getLogger(__name__)
