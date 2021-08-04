@@ -15,11 +15,11 @@ class NDXElectrometer:
         self.name = name
         self.epics_name = epics_name
 
-        self.capacitor_switch = epics.PV(f"{self.epics_name}_CAPACITOR_SW")
-        self.daq_enabled = epics.PV(f"{self.epics_name}_RESET")
-        self.integration_period = epics.PV(f"{self.epics_name}_PERIOD")
-        self.hv_set_point = epics.PV(f"{self.epics_name}_HV_BIAS")
-        self.hv_read_back = epics.PV(f"{self.epics_name}_HV_RBCK")
+        self.capacitor_switch = epics.PV(f"{self.epics_name}_CAPACITOR_SW", connection_callback=connection_cb)
+        self.daq_enabled = epics.PV(f"{self.epics_name}_RESET", connection_callback=connection_cb)
+        self.integration_period = epics.PV(f"{self.epics_name}_PERIOD", connection_callback=connection_cb)
+        self.hv_set_point = epics.PV(f"{self.epics_name}_HV_BIAS", connection_callback=connection_cb)
+        self.hv_read_back = epics.PV(f"{self.epics_name}_HV_RBCK", connection_callback=connection_cb)
         self.hv_read_back.add_callback(hv_read_back_cb)
 
         # Do this check once at the start.  The rest of the time we monitor the read back in the StateMonitor to make
