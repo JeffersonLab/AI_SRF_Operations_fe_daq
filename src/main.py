@@ -31,7 +31,7 @@ def main() -> int:
 
     try:
         args = parser.parse_args()
-        print(ascii(args))
+        logger.info(f"CLI args = {ascii(args)}")
 
         zone_name = args.zone
         linac_name = args.linac
@@ -58,8 +58,7 @@ def main() -> int:
             procedures.run_find_fe_process(zone, linac)
 
         if args.mode == 'g_scan':
-            procedures.scan_gradient(cavity=cavity, zone=zone, linac=linac, avg_time=average_time,
-                                     settle_time=settle_time)
+            procedures.run_gradient_scan(zone=zone, linac=linac, avg_time=average_time, settle_time=settle_time)
 
         linac.restore_psets()
     except Exception as ex:
