@@ -280,7 +280,7 @@ def scan_cavity_gradient(cavity: Cavity, zone: Zone, linac: Linac, avg_time: flo
                         settle_end_str = settle_end.strftime(fmt)
                         avg_start_str = avg_start.strftime(fmt)
                         avg_end_str = avg_end.strftime(fmt)
-                        logger.debug("Writing to data log")
+                        logger.info("Writing to data log")
                         f.write(
                             f"{settle_start_str},{settle_end_str},{avg_start_str},{avg_end_str},{settle_time},"
                             f"{avg_time},{cavity.name},{cavity.epics_name}\n")
