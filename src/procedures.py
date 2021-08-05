@@ -257,13 +257,13 @@ def scan_cavity_gradient(cavity: Cavity, zone: Zone, linac: Linac, avg_time: flo
             for z_level in zone_levels:
                 for l_level in linac_levels:
                     try:
-                        logger.info("Setting gradients")
+                        logger.info(f"Setting cavity gradient ({cavity.name} = {gset_base + gset_step_size * i})")
                         cavity.set_gradient(gset_base + gset_step_size * i)
-                        logger.info("Setting zone gradients")
+                        logger.info(f"Setting zone gradients ({zone.name} = {z_level})")
                         zone.set_gradients(exclude_cavs=[cavity], level=z_level)
-                        logger.info("Setting linac gradients")
+                        logger.info(f"Setting linac gradients ({linac.name} = {l_level})")
                         linac.set_gradients(exclude_cavs=[cavity], exclude_zones=[zone], level=l_level)
-                        logger.info("Setting linac phases")
+                        logger.info("Jiggling linac phases [-5, 5] degrees")
                         linac.jiggle_psets(5.0)
 
                         # If we're given a settle time, then sleep in small increments until that time is up.  Channel
