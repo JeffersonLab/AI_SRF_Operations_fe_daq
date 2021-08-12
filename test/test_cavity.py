@@ -51,7 +51,7 @@ class TestCavity(TestCase):
         cav.set_gradient(5, settle_time=0)
 
         # Test that we can't turn on a bypassed cavity, but that we can set them to zero.
-        cav.bypassed = True
+        cav.bypassed_eff = True
         with self.assertRaises(Exception) as context:
             cav.set_gradient(6)
         cav.set_gradient(0)
