@@ -112,12 +112,13 @@ def setup_cavities() -> None:
             val_list.append(3)
         elif cavity_type == "C25":
             val_list.append(3)
+        elif cavity_type == "P1R":
+            val_list.append(5)
 
         # Setup a callback that will make radiation signal appear above FE onset
         PVs[pv_name] = PV(pv_name)
         PVs[pv_name].add_callback(gset_cb)
         fe_onset[pv_name] = max(float(max_gset) - 1, 7)  # FE onset here is simply one less than max gradient
-
 
     caput_many(pv_list, val_list, wait=True)
     print("RF PVs Done!")
