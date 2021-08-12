@@ -39,16 +39,16 @@ class TestCavity(TestCase):
     def test_set_gradient(self):
         cav = get_cavity()
         with self.assertRaises(Exception) as context:
-            cav.set_gradient(0.1)
+            cav.set_gradient(0.1, settle_time=0)
 
         with self.assertRaises(Exception) as context:
-            cav.set_gradient(100)
+            cav.set_gradient(100, settle_time=0)
 
         # Should be fine since we can turn a cavity off
-        cav.set_gradient(0)
+        cav.set_gradient(0, settle_time=0)
 
         # Should be fine since this is the min stable gradient
-        cav.set_gradient(5)
+        cav.set_gradient(5, settle_time=0)
 
         # Test that we can't turn on a bypassed cavity, but that we can set them to zero.
         cav.bypassed = True
