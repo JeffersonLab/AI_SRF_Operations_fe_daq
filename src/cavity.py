@@ -1,3 +1,5 @@
+from datetime import datetime
+
 import epics
 import logging
 import numpy as np
@@ -45,6 +47,11 @@ class Cavity:
             self.rf_on = epics.PV(f"{self.epics_name}ACK1.B6", connection_callback=connection_cb)
             self.gset_min = 3
 
+        if self.cavity_type == "C100":
+            self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
+        else:
+            self.stat1 = None
+
         # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
         if not self.bypassed:
             self.rf_on.add_callback(rf_on_cb)
@@ -58,6 +65,14 @@ class Cavity:
         elif self.odvh.value == 0:
             self.bypassed_eff = True
 
+    def is_gradient_ramping(self):
+        if self.stat1 is None:
+            raise RuntimeError("Ramping check is not supported on this cavity.")
+
+        # The "is ramping" field is the 11th bit counting from zero.  If it's zero, then we're not ramping.  Otherwise,
+        # we're ramping.
+        return int(self.stat1.get()) & 0x0800 > 0
+
     def get_jiggled_pset_value(self, delta: float) -> float:
         """Calculate a random.uniform offset from pset_init of maximum +/- 5.  No changes to EPICS"""
         return self.pset_init + np.random.uniform(-delta, delta)
@@ -66,7 +81,12 @@ class Cavity:
         """Return the appropriate lowest no FE gradient.  Either the lowest stable or the highest known without FE."""
         return self.gset_min if self.gset_no_fe is None else self.gset_no_fe
 
-    def set_gradient(self, gset: float, settle_time: float = 6.0):
+    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True):
+        if self.cavity_type != "C100":
+            msg = f"{self.name}: We can only adjust gradients on C100s."
+            logger.error(msg)
+            raise ValueError(msg)
+
         if gset != 0 and self.bypassed_eff:
             msg = f"{self.name}: Can't turn on bypassed cavity"
             logger.error(msg)
@@ -79,10 +99,31 @@ class Cavity:
             msg = f"{self.name}: Can't turn cavity above operational max (ODVH={self.odvh.value})"
             logger.error(msg)
             raise ValueError(msg)
+        current = self.gset.get(use_monitor=False)
+        if abs(gset - current) > 1:
+            msg = f"{self.name}: Can't more more than 1 MV/m at a time. (new: {gset}, current: {current})"
+            logger.error(msg)
+            raise ValueError(msg)
 
         # Instead of trying to watch tuner status, etc., we just set the gradient, then sleep some requested amount of
         # time.  This will need to be approached differently if used in a more general purpose application.
-        self.gset.put(gset, wait=True)
+        # C100's will ramp gradient for you, but we need to wait for it.
+        self.gset.put(gset)
+        if wait_for_ramp:
+            logger.info(f"{self.name} waiting for gradient to ramp")
+            start_ramp = datetime.now()
+            while self.is_gradient_ramping():
+                StateMonitor.monitor(0.1)
+                if (datetime.now() - start_ramp).total_seconds() > 10:
+                    logger.warning(f"{self.name} is taking a long time to ramp.")
+                    response = input(f"Waited 10 seconds for {self.name} to ramp.  Continue? (n|y): ").lstrip().lower()
+                    if not response.startswith("y"):
+                        msg = f"User requested exit while waiting on {self.name} to ramp."
+                        logger.error(msg)
+                        raise RuntimeError(msg)
+                    start_ramp = datetime.now()
+
+        logging.info(f"{self.name} Waiting {settle_time} seconds for cryo to adjust")
         StateMonitor.monitor(duration=settle_time)
 
     def restore_pset(self):
