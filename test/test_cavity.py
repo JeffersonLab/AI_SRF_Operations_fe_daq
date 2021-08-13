@@ -1,4 +1,6 @@
 import time
+from datetime import datetime
+from threading import Thread
 from unittest import TestCase
 import logging
 
@@ -15,6 +17,18 @@ def get_cavity():
     zone = Zone(name="1L22", linac=linac)
     cav = Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False, zone=zone)
     return cav
+
+def get_gradient_step_size(cavity: Cavity):
+    gset = cavity.gset.value
+    step = 0.1
+    if cavity.odvh.value < gset + 0.1:
+        step = -0.1
+    return step
+
+
+def stop_ramping(pv, delay=0.5):
+    time.sleep(delay)
+    pv.put(0)
 
 
 class TestCavity(TestCase):
@@ -39,28 +53,67 @@ class TestCavity(TestCase):
     def test_set_gradient(self):
         cav = get_cavity()
         with self.assertRaises(Exception) as context:
-            cav.set_gradient(0.1, settle_time=0)
+            cav.set_gradient(0.1, settle_time=0, wait_for_ramp=False)
 
         with self.assertRaises(Exception) as context:
-            cav.set_gradient(100, settle_time=0)
+            cav.set_gradient(100, settle_time=0, wait_for_ramp=False)
 
-        # Should be fine since we can turn a cavity off
-        cav.set_gradient(0, settle_time=0)
+        # Can't step up more than 2
+        gset = cav.gset.value
+        with self.assertRaises(Exception) as context:
+            cav.set_gradient(gset+2, settle_time=0, wait_for_ramp=False)
 
-        # Should be fine since this is the min stable gradient
-        cav.set_gradient(5, settle_time=0)
+        # Should be fine since we're stepping less than 1 MV/m in a good direction
+        step = get_gradient_step_size(cav)
+        cav.set_gradient(gset + step, settle_time=0, wait_for_ramp=False)
+        cav.set_gradient(gset, settle_time=0, wait_for_ramp=False)
 
-        # Test that we can't turn on a bypassed cavity, but that we can set them to zero.
+        # Test that we can't adjust a bypassed cavity.
         cav.bypassed_eff = True
         with self.assertRaises(Exception) as context:
-            cav.set_gradient(6)
-        cav.set_gradient(0)
+            cav.set_gradient(6, wait_for_ramp=False)
+        cav.bypassed_eff = False
+
+    def test_set_gradient_ramping(self):
+        cav = get_cavity()
+
+        ramp_time = 0.25
+        gset = cav.gset.value
+        step = 0.1
+        if cav.odvh.value < gset + 0.1:
+            step = -0.1
+
+        # Test that we do wait for ramping to be done
+        cav.stat1.put(2048)
+        t1 = Thread(target=stop_ramping, args=(cav.stat1, ramp_time))
+        start = datetime.now()
+        t1.start()
+        cav.set_gradient(gset + step, settle_time=0)
+        end = datetime.now()
+        t1.join()
+        waited = abs(ramp_time - (end - start).total_seconds())
+        self.assertTrue(waited < 0.1, msg=f"We didn't wait for ramping properly.  Exp={ramp_time}, Result={waited}")
+
+    def test_set_gradient_ramping_interactive(self):
+        # This test requires user input since the ramp_time will exceed 10s
+        cav = get_cavity()
+
+        ramp_time = 0.5
+        gset = cav.gset.value
+        step = get_gradient_step_size(cav)
+
+        # Test that we do wait for ramping to be done
+        cav.stat1.put(2048)
+        t1 = Thread(target=stop_ramping, args=(cav.stat1, ramp_time))
+        t1.start()
+        cav.set_gradient(gset + step, settle_time=0, ramp_timeout=0.3)
+        t1.join()
 
     def test_restore_pset(self):
         cav = get_cavity()
         exp = cav.pset_init
 
-        cav.pset.value = exp + 1
+        cav.pset.put(exp + 1, wait=True)
         cav.restore_pset()
 
         time.sleep(0.01)
