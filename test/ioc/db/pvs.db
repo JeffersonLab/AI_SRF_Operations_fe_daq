@@ -17,6 +17,12 @@ record(ao, "adamc:R$(A)PSET") {
     field(PINI, "TRUE")
 }
 
+record(ai, "adamc:R$(A)STAT1") {
+    field(VAL, 0)
+    field(PINI, "TRUE")
+}
+
+
 # RF On PV
 # 12 GeV style controls
 record(ao, "adamc:R$(A)RFONr") {
