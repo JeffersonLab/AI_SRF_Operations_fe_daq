@@ -187,7 +187,7 @@ __rf_on: {ascii(cls.__rf_on)}"""
         if duration is not None and duration > 0.0:
             cls.check_state(user_input=user_input)
             while (datetime.now() - start).total_seconds() < duration:
-                time.sleep(0.1)
+                time.sleep(0.05)
 
         cls.check_state(user_input=user_input)
         end = datetime.now()
