@@ -132,48 +132,48 @@ class Zone:
         if cavity.name not in self.cavities.keys():
             self.cavities[cavity.name] = cavity
 
-    def set_gradients(self, exclude_cavs: List[Cavity] = None, level: str = "low") -> None:
-        """Set the cavity gradients high/low for cavities in the zone, optionally excluding some cavities
-
-        Arguments:
-            exclude_cavs: A list of cavities that should not be changed.  None if all cavities should be changed
-            level:  'low' for their defined low level, 'high' for close to ODVH
-
-        """
-
-        # We'll use the put_many call since we're dealing with multiple PVs
-        pvlist = []
-        values = []
-        for cav in self.cavities.values():
-
-            StateMonitor.check_state()
-            # Check if we are excluding this cavity from change
-            if exclude_cavs is not None:
-                skip = False
-                for ex_cav in exclude_cavs:
-                    if cav.name == ex_cav.name:
-                        skip = True
-                if skip:
-                    continue
-
-            # Get the low/high level we want to set the cavity to
-            if level == "high":
-                # For varying over the zone we want a tighter range since we're probably dealing with no trip models
-                val = np.random.uniform(cav.odvh.get() - 2, cav.odvh.get())
-            elif level == "low":
-                val = cav.gset_min if cav.gset_no_fe is None else cav.gset_no_fe
-            else:
-                msg = "Unsupported level specified"
-                logger.error(msg)
-                raise ValueError(msg)
-
-            pvlist.append(cav.gset.pvname)
-            values.append(val)
-            logger.debug(f"Cav: {cav.name} ({cav.gset.pvname})  ODVH: {cav.odvh.get()}, GSET: {val}")
-
-        # Check that we're up prior to applying changes
-        StateMonitor.check_state()
-        epics.caput_many(pvlist, values, wait=True)
+    # def set_gradients(self, exclude_cavs: List[Cavity] = None, level: str = "low") -> None:
+    #     """Set the cavity gradients high/low for cavities in the zone, optionally excluding some cavities
+    #
+    #     Arguments:
+    #         exclude_cavs: A list of cavities that should not be changed.  None if all cavities should be changed
+    #         level:  'low' for their defined low level, 'high' for close to ODVH
+    #
+    #     """
+    #
+    #     # We'll use the put_many call since we're dealing with multiple PVs
+    #     pvlist = []
+    #     values = []
+    #     for cav in self.cavities.values():
+    #
+    #         StateMonitor.check_state()
+    #         # Check if we are excluding this cavity from change
+    #         if exclude_cavs is not None:
+    #             skip = False
+    #             for ex_cav in exclude_cavs:
+    #                 if cav.name == ex_cav.name:
+    #                     skip = True
+    #             if skip:
+    #                 continue
+    #
+    #         # Get the low/high level we want to set the cavity to
+    #         if level == "high":
+    #             # For varying over the zone we want a tighter range since we're probably dealing with no trip models
+    #             val = np.random.uniform(cav.odvh.get() - 2, cav.odvh.get())
+    #         elif level == "low":
+    #             val = cav.gset_min if cav.gset_no_fe is None else cav.gset_no_fe
+    #         else:
+    #             msg = "Unsupported level specified"
+    #             logger.error(msg)
+    #             raise ValueError(msg)
+    #
+    #         pvlist.append(cav.gset.pvname)
+    #         values.append(val)
+    #         logger.debug(f"Cav: {cav.name} ({cav.gset.pvname})  ODVH: {cav.odvh.get()}, GSET: {val}")
+    #
+    #     # Check that we're up prior to applying changes
+    #     StateMonitor.check_state()
+    #     epics.caput_many(pvlist, values, wait=True)
 
 
 class LinacFactory:
