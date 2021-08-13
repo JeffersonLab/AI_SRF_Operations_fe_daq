@@ -1,4 +1,5 @@
 import logging
+import os
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
@@ -34,57 +35,57 @@ class Linac:
             raise ValueError("Trying to insert cavity into unrecognized zone")
         self.zones[cavity.zone.name].add_cavity(cavity)
 
-    def set_gradients(self, exclude_cavs: List[Cavity] = None, exclude_zones: List['Zone'] = None,
-                      level: str = "low") -> None:
-        """Set the cavity gradients high/low for cavities in the zone, optionally excluding some cavities
-
-        Arguments:
-            exclude_cavs: A list of cavities that should not be changed.  None if all cavities should be changed
-            exclude_zones: A list of zones that should not be changed.  None if all zones should be changed
-            level:  'low' for their defined low level, 'high' for close to ODVH
-
-        """
-
-        # We'll use the put_many call since we're dealing with multiple PVs
-        pvlist = []
-        values = []
-        for cav in self.cavities.values():
-
-            # Check if we are excluding this cavity or zone from change
-            if exclude_cavs is not None:
-                skip = False
-                for ex_cav in exclude_cavs:
-                    if cav.name == ex_cav.name:
-                        skip = True
-                if skip:
-                    logger.debug(f"Skipping cavity {cav.name} explicitly")
-                    continue
-            if exclude_zones is not None:
-                skip = False
-                for ex_zone in exclude_zones:
-                    if cav.zone.name == ex_zone.name:
-                        logger.debug(f"Skipping cavity {cav.name} in excluded {ex_zone.name}")
-                        skip = True
-                if skip:
-                    continue
-
-            if cav.bypassed:
-                continue
-
-            pvlist.append(cav.gset.pvname)
-            if level == "high":
-                # For varying over the linac we want a broader range since this includes cavities with trip models
-                val = np.random.uniform(cav.odvh.value - 3, cav.odvh.value)
-            elif level == "low":
-                val = cav.get_low_gset()
-            else:
-                msg = "Unsupported level specified"
-                logger.error(msg)
-                raise ValueError(msg)
-            values.append(val)
-            logger.debug(f"Cav: {cav.name},  ODVH: {cav.odvh.get()}, GSET: {val}")
-
-        epics.caput_many(pvlist, values, wait=True)
+    # def set_gradients(self, exclude_cavs: List[Cavity] = None, exclude_zones: List['Zone'] = None,
+    #                   level: str = "low") -> None:
+    #     """Set the cavity gradients high/low for cavities in the zone, optionally excluding some cavities
+    #
+    #     Arguments:
+    #         exclude_cavs: A list of cavities that should not be changed.  None if all cavities should be changed
+    #         exclude_zones: A list of zones that should not be changed.  None if all zones should be changed
+    #         level:  'low' for their defined low level, 'high' for close to ODVH
+    #
+    #     """
+    #
+    #     # We'll use the put_many call since we're dealing with multiple PVs
+    #     pvlist = []
+    #     values = []
+    #     for cav in self.cavities.values():
+    #
+    #         # Check if we are excluding this cavity or zone from change
+    #         if exclude_cavs is not None:
+    #             skip = False
+    #             for ex_cav in exclude_cavs:
+    #                 if cav.name == ex_cav.name:
+    #                     skip = True
+    #             if skip:
+    #                 logger.debug(f"Skipping cavity {cav.name} explicitly")
+    #                 continue
+    #         if exclude_zones is not None:
+    #             skip = False
+    #             for ex_zone in exclude_zones:
+    #                 if cav.zone.name == ex_zone.name:
+    #                     logger.debug(f"Skipping cavity {cav.name} in excluded {ex_zone.name}")
+    #                     skip = True
+    #             if skip:
+    #                 continue
+    #
+    #         if cav.bypassed:
+    #             continue
+    #
+    #         pvlist.append(cav.gset.pvname)
+    #         if level == "high":
+    #             # For varying over the linac we want a broader range since this includes cavities with trip models
+    #             val = np.random.uniform(cav.odvh.value - 3, cav.odvh.value)
+    #         elif level == "low":
+    #             val = cav.get_low_gset()
+    #         else:
+    #             msg = "Unsupported level specified"
+    #             logger.error(msg)
+    #             raise ValueError(msg)
+    #         values.append(val)
+    #         logger.debug(f"Cav: {cav.name},  ODVH: {cav.odvh.get()}, GSET: {val}")
+    #
+    #     epics.caput_many(pvlist, values, wait=True)
 
     def jiggle_psets(self, delta: float):
         """Jiggle PSET values for all cavities in the linac about their starting point."""
@@ -262,17 +263,33 @@ class LinacFactory:
                         # Add a zone if we haven't seen this before.
                         linac.zones[zone_name] = Zone(name=zone_name, linac=linac)
 
-    def _setup_cavities(self, linac: Linac) -> None:
+    def _setup_cavities(self, linac: Linac, no_fe_file="./no_fe.tsv", fe_onset_file="./fe_onset.tsv") -> None:
         """Creates cavities from CED data and adds to linac and zone.  Expects _setup_zones to have been run."""
         ced_params = 't=CryoCavity&p=EPICSName&p=CavityType&p=MaxGSET&p=OpsGsetMax&p=Bypassed&p=Length&p=Housed_by' \
                      '&out=json'
         ced_url = f"http://{self.ced_server}/inventory?ced={self.ced_instance}&workspace={self.ced_workspace}" \
                   f"&{ced_params}"
         cavity_elements = self._get_ced_elements(ced_url=ced_url)
+
+        no_fe = None
+        if os.path.exists(no_fe_file):
+            no_fe = {}
+            with open(no_fe_file, mode="r") as f:
+                tokens = f.readline().split('\t')
+                no_fe[tokens[0]] = float(tokens[1])
+
+        fe_onset = None
+        if os.path.exists(fe_onset_file):
+            fe_onset = {}
+            with open(fe_onset_file, mode="r") as f:
+                tokens = f.readline().split('\t')
+                fe_onset[tokens[0]] = float(tokens[1])
+
         if self.testing:
-            self._add_cavity_to_linac(cavity_elements, linac, prefix="adamc:")
+            self._add_cavity_to_linac(cavity_elements, linac, prefix="adamc:", no_fe_gsets=no_fe,
+                                      fe_onset_gsets=fe_onset)
         else:
-            self._add_cavity_to_linac(cavity_elements, linac)
+            self._add_cavity_to_linac(cavity_elements, linac, no_fe_gsets=no_fe, fe_onset_gsets=fe_onset)
 
     def _setup_ndx(self, linac: Linac, detector_names: List[str] = None) -> None:
         """Creates NDX related objects from CED and adds them to the supplied Linac."""
@@ -324,7 +341,7 @@ class LinacFactory:
         return out['Inventory']['elements']
 
     @staticmethod
-    def _add_cavity_to_linac(elements, linac, prefix=None):
+    def _add_cavity_to_linac(elements, linac, prefix=None, no_fe_gsets=None, fe_onset_gsets=None):
 
         for e in elements:
             # Grab cavity properties
@@ -338,10 +355,19 @@ class LinacFactory:
             length = float(p['Length'])
             bypassed = True if 'Bypassed' in p.keys() else False
 
+            gset_no_fe = None
+            if no_fe_gsets is not None and epics_name in no_fe_gsets.keys():
+                gset_no_fe = no_fe_gsets[epics_name]
+
+            gset_fe_onset = None
+            if fe_onset_gsets is not None and epics_name in fe_onset_gsets.keys():
+                gset_fe_onset = fe_onset_gsets[epics_name]
+
             # Only add cavities that are in zones in this Linac
             if zone in linac.zones.keys():
                 cavity = Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                                bypassed=bypassed, zone=linac.zones[zone])
+                                bypassed=bypassed, zone=linac.zones[zone], gset_no_fe=gset_no_fe,
+                                gset_fe_onset=gset_fe_onset)
                 linac.add_cavity(cavity)
 
         # Here we check that all cavity PVs are able to connect and run any initialization that happens after
