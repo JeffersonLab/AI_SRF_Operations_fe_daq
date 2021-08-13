@@ -235,22 +235,22 @@ class TestZone(TestCase):
         self.assertFalse(cavity.name in linac.cavities.keys())
         self.assertTrue(cavity.name in linac.zones['1L11'].cavities.keys())
 
-    def test_set_gradients(self):
-        lf = LinacFactory(testing=True)
-        linac = lf.create_linac(name="NorthLinac")
-        z_1L22 = linac.zones['1L22']
-        cav = z_1L22.cavities['1L22-1']
-
-        # Set everything to min gset.  Check that it worked
-        z_1L22.set_gradients(level="low")
-        self.assertEqual(5.0, cav.gset.get(use_monitor=False))
-
-        # Set cav to middle level and everything else to high
-        cav.gset.put(10)
-        z_1L22.set_gradients(exclude_cavs=[cav], level='high')
-
-        # Check that only cavities not excluded were updated
-        odvh = z_1L22.cavities['1L22-2'].odvh.value
-        result = z_1L22.cavities['1L22-2'].gset.get(use_monitor=False)
-        self.assertEqual(10, cav.gset.get(use_monitor=False))
-        self.assertTrue(odvh - 2 <= result <= odvh, f"ODVH:{odvh}, result:{result}")
+    # def test_set_gradients(self):
+    #     lf = LinacFactory(testing=True)
+    #     linac = lf.create_linac(name="NorthLinac")
+    #     z_1L22 = linac.zones['1L22']
+    #     cav = z_1L22.cavities['1L22-1']
+    #
+    #     # Set everything to min gset.  Check that it worked
+    #     z_1L22.set_gradients(level="low")
+    #     self.assertEqual(5.0, cav.gset.get(use_monitor=False))
+    #
+    #     # Set cav to middle level and everything else to high
+    #     cav.gset.put(10)
+    #     z_1L22.set_gradients(exclude_cavs=[cav], level='high')
+    #
+    #     # Check that only cavities not excluded were updated
+    #     odvh = z_1L22.cavities['1L22-2'].odvh.value
+    #     result = z_1L22.cavities['1L22-2'].gset.get(use_monitor=False)
+    #     self.assertEqual(10, cav.gset.get(use_monitor=False))
+    #     self.assertTrue(odvh - 2 <= result <= odvh, f"ODVH:{odvh}, result:{result}")
