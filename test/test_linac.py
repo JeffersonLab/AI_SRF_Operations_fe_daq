@@ -1,13 +1,73 @@
 import time
-from datetime import datetime
+from typing import List
 from unittest import TestCase
 import logging
+import numpy as np
+import epics
 
 from cavity import Cavity
 from linac import LinacFactory, Linac, Zone
 
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
+
+
+# This is a routine that should not be used with a real linac since it could overwhelm cryo and cause it to trip.
+def set_gradients(linac: Linac, exclude_cavs: List[Cavity] = None, exclude_zones: List['Zone'] = None,
+                  level: str = "low") -> None:
+    """Set the cavity gradients high/low for cavities in the zone, optionally excluding some cavities
+
+    Arguments:
+        linac: The linac on which to make changes
+        exclude_cavs: A list of cavities that should not be changed.  None if all cavities should be changed
+        exclude_zones: A list of zones that should not be changed.  None if all zones should be changed
+        level:  'low' for their defined low level, 'high' for close to ODVH
+
+    """
+
+    # We'll use the put_many call since we're dealing with multiple PVs
+    pvlist = []
+    values = []
+    for cav in linac.cavities.values():
+
+        # Check if we are excluding this cavity or zone from change
+        if exclude_cavs is not None:
+            skip = False
+            for ex_cav in exclude_cavs:
+                if cav.name == ex_cav.name:
+                    skip = True
+            if skip:
+                logger.debug(f"Skipping cavity {cav.name} explicitly")
+                continue
+        if exclude_zones is not None:
+            skip = False
+            for ex_zone in exclude_zones:
+                if cav.zone.name == ex_zone.name:
+                    logger.debug(f"Skipping cavity {cav.name} in excluded {ex_zone.name}")
+                    skip = True
+            if skip:
+                continue
+
+        if cav.bypassed:
+            continue
+
+        if not cav.gset.pvname.startswith("adamc:"):
+            raise RuntimeError("Do not under any circumstances try this with real PVs!.")
+
+        pvlist.append(cav.gset.pvname)
+        if level == "high":
+            # For varying over the linac we want a broader range since this includes cavities with trip models
+            val = np.random.uniform(cav.odvh.value - 3, cav.odvh.value)
+        elif level == "low":
+            val = cav.get_low_gset()
+        else:
+            msg = "Unsupported level specified"
+            logger.error(msg)
+            raise ValueError(msg)
+        values.append(val)
+        logger.debug(f"Cav: {cav.name},  ODVH: {cav.odvh.get()}, GSET: {val}")
+
+    epics.caput_many(pvlist, values, wait=True)
 
 
 class TestLinacFactory(TestCase):
@@ -81,40 +141,42 @@ class TestLinac(TestCase):
         self.assertTrue(cavity.name in linac.cavities.keys())
         self.assertTrue(cavity.name in linac.zones['1L11'].cavities.keys())
 
-    def test_set_gradients(self):
-        lf = LinacFactory(testing=True)
-
-        # Check that the segmask filtering works
-        linac = Linac("NorthLinac")
-        lf._setup_zones(linac)
-        lf._setup_cavities(linac)
-
-        z_1L22 = linac.zones['1L22']
-        z_1L23 = linac.zones['1L23']
-
-        # Set everything to min gset.  Check that it worked
-        linac.set_gradients(level="low")
-        self.assertEqual(5.0, z_1L22.cavities['1L22-1'].gset.get(use_monitor=False))
-
-        # Set everything but 1L23 to high.
-        linac.set_gradients(exclude_zones=[z_1L23], level="high")
-
-        # auto_monitor is not reliable when recently doing puts
-        result = z_1L22.cavities['1L22-1'].gset.get(use_monitor=False)
-        odvh = z_1L22.cavities['1L22-1'].odvh.value
-
-        # Did 1L22-1 get set within 1 of odvh?
-        self.assertTrue(odvh - 3 <= result <= odvh, f"ODVH:{odvh}, result:{result}")
-
-        # Did 1L23-1 get set to it's min (5.0) and not a "high" value
-        result = z_1L23.cavities['1L23-1'].gset.get(use_monitor=False)
-        self.assertEqual(5.0, result)
+    # This test was used when I had the set_gradients method for a linac.  That method was removed to ensure I didn't
+    # accidentally try to update a whole linac at once.  That could crash cryo.
+    # def test_set_gradients(self):
+    #     lf = LinacFactory(testing=True)
+    #
+    #     # Check that the segmask filtering works
+    #     linac = Linac("NorthLinac")
+    #     lf._setup_zones(linac)
+    #     lf._setup_cavities(linac)
+    #
+    #     z_1L22 = linac.zones['1L22']
+    #     z_1L23 = linac.zones['1L23']
+    #
+    #     # Set everything to min gset.  Check that it worked
+    #     linac.set_gradients(level="low")
+    #     self.assertEqual(5.0, z_1L22.cavities['1L22-1'].gset.get(use_monitor=False))
+    #
+    #     # Set everything but 1L23 to high.
+    #     linac.set_gradients(exclude_zones=[z_1L23], level="high")
+    #
+    #     # auto_monitor is not reliable when recently doing puts
+    #     result = z_1L22.cavities['1L22-1'].gset.get(use_monitor=False)
+    #     odvh = z_1L22.cavities['1L22-1'].odvh.value
+    #
+    #     # Did 1L22-1 get set within 1 of odvh?
+    #     self.assertTrue(odvh - 3 <= result <= odvh, f"ODVH:{odvh}, result:{result}")
+    #
+    #     # Did 1L23-1 get set to it's min (5.0) and not a "high" value
+    #     result = z_1L23.cavities['1L23-1'].gset.get(use_monitor=False)
+    #     self.assertEqual(5.0, result)
 
     def test_get_radiation_measurements(self):
         lf = LinacFactory(testing=True)
         linac = lf.create_linac("NorthLinac")
 
-        linac.set_gradients(level="low")
+        set_gradients(linac, level="low")
         time.sleep(0.05)  # Sleep just long enough for my dumb IOC controller script to react to this.
         num_samples = 3
         linac.get_radiation_measurements(num_samples)
@@ -136,7 +198,7 @@ class TestLinac(TestCase):
                              f"{ndxd.name}: Rad too high, g_t: {ndxd.get_gamma_t_stat()},"
                              f" n_t: {ndxd.get_neutron_t_stat()}")
 
-        linac.set_gradients(level="high")
+        set_gradients(linac=linac, level="high")
         time.sleep(0.05)  # Sleep just long enough for my dumb IOC controller script to react to this.
         num_samples = 3
         linac.get_radiation_measurements(num_samples)

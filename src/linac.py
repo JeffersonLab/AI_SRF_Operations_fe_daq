@@ -35,58 +35,6 @@ class Linac:
             raise ValueError("Trying to insert cavity into unrecognized zone")
         self.zones[cavity.zone.name].add_cavity(cavity)
 
-    # def set_gradients(self, exclude_cavs: List[Cavity] = None, exclude_zones: List['Zone'] = None,
-    #                   level: str = "low") -> None:
-    #     """Set the cavity gradients high/low for cavities in the zone, optionally excluding some cavities
-    #
-    #     Arguments:
-    #         exclude_cavs: A list of cavities that should not be changed.  None if all cavities should be changed
-    #         exclude_zones: A list of zones that should not be changed.  None if all zones should be changed
-    #         level:  'low' for their defined low level, 'high' for close to ODVH
-    #
-    #     """
-    #
-    #     # We'll use the put_many call since we're dealing with multiple PVs
-    #     pvlist = []
-    #     values = []
-    #     for cav in self.cavities.values():
-    #
-    #         # Check if we are excluding this cavity or zone from change
-    #         if exclude_cavs is not None:
-    #             skip = False
-    #             for ex_cav in exclude_cavs:
-    #                 if cav.name == ex_cav.name:
-    #                     skip = True
-    #             if skip:
-    #                 logger.debug(f"Skipping cavity {cav.name} explicitly")
-    #                 continue
-    #         if exclude_zones is not None:
-    #             skip = False
-    #             for ex_zone in exclude_zones:
-    #                 if cav.zone.name == ex_zone.name:
-    #                     logger.debug(f"Skipping cavity {cav.name} in excluded {ex_zone.name}")
-    #                     skip = True
-    #             if skip:
-    #                 continue
-    #
-    #         if cav.bypassed:
-    #             continue
-    #
-    #         pvlist.append(cav.gset.pvname)
-    #         if level == "high":
-    #             # For varying over the linac we want a broader range since this includes cavities with trip models
-    #             val = np.random.uniform(cav.odvh.value - 3, cav.odvh.value)
-    #         elif level == "low":
-    #             val = cav.get_low_gset()
-    #         else:
-    #             msg = "Unsupported level specified"
-    #             logger.error(msg)
-    #             raise ValueError(msg)
-    #         values.append(val)
-    #         logger.debug(f"Cav: {cav.name},  ODVH: {cav.odvh.get()}, GSET: {val}")
-    #
-    #     epics.caput_many(pvlist, values, wait=True)
-
     def jiggle_psets(self, delta: float):
         """Jiggle PSET values for all cavities in the linac about their starting point."""
 
