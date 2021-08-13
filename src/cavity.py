@@ -8,6 +8,7 @@ from state_monitor import connection_cb, rf_on_cb, StateMonitor
 
 logger = logging.getLogger(__name__)
 
+
 class Cavity:
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
                  bypassed: bool, zone: 'Zone', gset_no_fe: float = None, gset_fe_onset: float = None):
@@ -71,7 +72,7 @@ class Cavity:
 
         # The "is ramping" field is the 11th bit counting from zero.  If it's zero, then we're not ramping.  Otherwise,
         # we're ramping.
-        return int(self.stat1.get()) & 0x0800 > 0
+        return int(self.stat1.value) & 0x0800 > 0
 
     def get_jiggled_pset_value(self, delta: float) -> float:
         """Calculate a random.uniform offset from pset_init of maximum +/- 5.  No changes to EPICS"""
@@ -81,7 +82,7 @@ class Cavity:
         """Return the appropriate lowest no FE gradient.  Either the lowest stable or the highest known without FE."""
         return self.gset_min if self.gset_no_fe is None else self.gset_no_fe
 
-    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True):
+    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=10):
         if self.cavity_type != "C100":
             msg = f"{self.name}: We can only adjust gradients on C100s."
             logger.error(msg)
@@ -100,8 +101,8 @@ class Cavity:
             logger.error(msg)
             raise ValueError(msg)
         current = self.gset.get(use_monitor=False)
-        if abs(gset - current) > 1:
-            msg = f"{self.name}: Can't more more than 1 MV/m at a time. (new: {gset}, current: {current})"
+        if abs(gset - current) > 1.001:
+            msg = f"{self.name}: Can't move GSET more than 1 MV/m at a time. (new: {gset}, current: {current})"
             logger.error(msg)
             raise ValueError(msg)
 
@@ -110,18 +111,35 @@ class Cavity:
         # C100's will ramp gradient for you, but we need to wait for it.
         self.gset.put(gset)
         if wait_for_ramp:
-            logger.info(f"{self.name} waiting for gradient to ramp")
-            start_ramp = datetime.now()
-            while self.is_gradient_ramping():
-                StateMonitor.monitor(0.1)
-                if (datetime.now() - start_ramp).total_seconds() > 10:
-                    logger.warning(f"{self.name} is taking a long time to ramp.")
-                    response = input(f"Waited 10 seconds for {self.name} to ramp.  Continue? (n|y): ").lstrip().lower()
-                    if not response.startswith("y"):
-                        msg = f"User requested exit while waiting on {self.name} to ramp."
-                        logger.error(msg)
-                        raise RuntimeError(msg)
-                    start_ramp = datetime.now()
+            # Here we wait to see if the cavity will start to ramp.  Since this updates on a 1 Hz cycle, I might have to
+            # wait as long as one second.
+            ramp_started = False
+            start_watching = datetime.now()
+            last_checked = datetime.now()
+            while (last_checked - start_watching).total_seconds() <= 1.01:
+                last_checked = datetime.now()
+                ramp_started = self.is_gradient_ramping()
+                if ramp_started:
+                    logger.info(f"{self.name} is ramping gradient")
+                    break
+
+            if ramp_started:
+                # Here we have to wait for the gradient to finish ramping, assuming it actually started
+                logger.info(f"{self.name} waiting for gradient to ramp")
+                start_ramp = datetime.now()
+                while self.is_gradient_ramping():
+                    StateMonitor.monitor(0.1)
+                    if (datetime.now() - start_ramp).total_seconds() > ramp_timeout:
+                        logger.warning(f"{self.name} is taking a long time to ramp.")
+                        response = input(
+                            f"Waited {ramp_timeout} seconds for {self.name} to ramp.  Continue? (n|y): ").lstrip().lower()
+                        if not response.startswith("y"):
+                            msg = f"User requested exit while waiting on {self.name} to ramp."
+                            logger.error(msg)
+                            raise RuntimeError(msg)
+                        start_ramp = datetime.now()
+            else:
+                logger.info(f"{self.name} did not ramp gradient")
 
         logging.info(f"{self.name} Waiting {settle_time} seconds for cryo to adjust")
         StateMonitor.monitor(duration=settle_time)
@@ -131,7 +149,6 @@ class Cavity:
 
     def restore_gset(self):
         self.set_gradient(self.gset_init)
-
 
     def wait_for_connections(self, timeout=2):
         """Wait for PVs to connect or timeout.  Then finish object initialization knowing PVs are connected.
