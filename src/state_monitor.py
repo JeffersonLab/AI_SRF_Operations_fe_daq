@@ -6,6 +6,13 @@ from typing import Union, Tuple
 
 logger = logging.getLogger(__name__)
 
+# An array for tracking if a PV has ever connected
+has_connected = []
+has_connected_lock = threading.Lock()
+
+# An array for tracking if RF has ever been on in that zone
+first_rf_on = []
+first_rf_on_lock = threading.Lock()
 
 def connection_cb(pvname: str = None, conn: bool = None, **kwargs) -> None:
     """This is a generic connection callback that pauses application operation when a disconnect occurs.
@@ -16,8 +23,15 @@ def connection_cb(pvname: str = None, conn: bool = None, **kwargs) -> None:
     """
 
     if conn:
-        StateMonitor.pv_reconnected(pvname=pvname)
-        logger.info(f"{pvname} connected.")
+        first_connect = False
+        with has_connected_lock:
+            if pvname not in has_connected:
+                first_connect = True
+                has_connected.append(pvname)
+
+        if not first_connect:
+            StateMonitor.pv_reconnected(pvname=pvname)
+            logger.info(f"{pvname} connected.")
     else:
         StateMonitor.pv_disconnected(pvname=pvname)
         logger.error(f"{pvname} disconnected.")
@@ -37,8 +51,15 @@ def rf_on_cb(pvname: str, value: float, **kwargs) -> None:
     """Monitor RF On PVs to make sure that the cavities are good to go for data collection"""
 
     if value == 1:
-        StateMonitor.rf_turned_on(pvname=pvname)
-        logger.info(f"{pvname} RF is On ({value})")
+        first_time = False
+        with first_rf_on_lock:
+            if pvname not in first_rf_on:
+                first_time = True
+                first_rf_on.append(pvname)
+
+        if not first_time:
+            StateMonitor.rf_turned_on(pvname=pvname)
+            logger.info(f"{pvname} RF is On ({value})")
     else:
         StateMonitor.rf_turned_off(pvname=pvname)
         logger.error(f"{pvname} RF is Off ({value})")
