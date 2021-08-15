@@ -83,6 +83,17 @@ class Cavity:
         return self.gset_min if self.gset_no_fe is None else self.gset_no_fe
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=10):
+        """Set a cavity's gradient and wait for supporting systems to compensate for the change.
+
+        New change can't be more than 1 MV/m away from current value.  Only supports C100.
+
+        Args:
+            gset: The new value to set GSET to
+            settle_time: How long we need to wait for cryo system to adjust to change in heat load
+            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C100s ramp for larger steps.
+            ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
+
+        """
         if self.cavity_type != "C100":
             msg = f"{self.name}: We can only adjust gradients on C100s."
             logger.error(msg)
