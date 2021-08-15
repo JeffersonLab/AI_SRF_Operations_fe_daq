@@ -141,7 +141,7 @@ class Cavity:
             else:
                 logger.info(f"{self.name} did not ramp gradient")
 
-        logging.info(f"{self.name} Waiting {settle_time} seconds for cryo to adjust")
+        logger.info(f"{self.name} Waiting {settle_time} seconds for cryo to adjust")
         StateMonitor.monitor(duration=settle_time)
 
     def restore_pset(self):
