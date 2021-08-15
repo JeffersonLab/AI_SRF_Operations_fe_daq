@@ -59,13 +59,13 @@ class Linac:
         # This will request user input if something goes wrong on the EPICS or RF side
         StateMonitor.check_state()
 
-        # Want to sample once per second.  Some time will be taken up by the EPICS communication.  Try to account for
-        # that.
-        start = datetime.now()
-
         # We have to wait for the integration time to be up before the detectors will reflect recent changes in GSET.
         # Add just a tiny bit more to make sure we get good data.
         time.sleep(integration_time + 0.05)
+
+        # Want to sample once per second.  Some time will be taken up by the EPICS communication.  Try to account for
+        # that.
+        start = datetime.now()
 
         # clear any stale data, and take the first measurements on each detector
         for d in self.ndx_detectors.values():
@@ -73,8 +73,12 @@ class Linac:
             d.take_measurement()
 
         for i in range(num_samples - 1):
+            # Try to be smart about sleeping.  There is a basic attempt to account for time lost to EPICS, etc.
             end = start + timedelta(seconds=1)
             sleep_duration = (end - datetime.now()).total_seconds()
+
+            # These PVs update at 1 Hz.  Don't sleep longer than 1 Hz, and don't try to sleep at all if EPICS took too
+            # long.
             if sleep_duration > 1:
                 logger.warning("get_radiation_measurements is trying to sleep more than one second.  Capping at one.")
                 sleep_duration = 1
@@ -211,7 +215,7 @@ class LinacFactory:
                         # Add a zone if we haven't seen this before.
                         linac.zones[zone_name] = Zone(name=zone_name, linac=linac)
 
-    def _setup_cavities(self, linac: Linac, no_fe_file="./no_fe.tsv", fe_onset_file="./fe_onset.tsv") -> None:
+    def _setup_cavities(self, linac: Linac, no_fe_file="./cfg/no_fe.tsv", fe_onset_file="./cfg/fe_onset.tsv") -> None:
         """Creates cavities from CED data and adds to linac and zone.  Expects _setup_zones to have been run."""
         ced_params = 't=CryoCavity&p=EPICSName&p=CavityType&p=MaxGSET&p=OpsGsetMax&p=Bypassed&p=Length&p=Housed_by' \
                      '&out=json'
@@ -223,15 +227,31 @@ class LinacFactory:
         if os.path.exists(no_fe_file):
             no_fe = {}
             with open(no_fe_file, mode="r") as f:
-                tokens = f.readline().split('\t')
-                no_fe[tokens[0]] = float(tokens[1])
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('#'):
+                        continue
+                    tokens = line.split('\t')
+                    # This will grab the last value in the file if repeats exist.
+                    if tokens[1] == "None":
+                        no_fe[tokens[0]] = None
+                    else:
+                        no_fe[tokens[0]] = float(tokens[1])
 
         fe_onset = None
-        if os.path.exists(fe_onset_file):
+        if os.path.exists(no_fe_file):
             fe_onset = {}
             with open(fe_onset_file, mode="r") as f:
-                tokens = f.readline().split('\t')
-                fe_onset[tokens[0]] = float(tokens[1])
+                for line in f:
+                    line = line.strip()
+                    if line.startswith('#'):
+                        continue
+                    tokens = line.split('\t')
+                    # This will grab the last value in the file if repeats exist.
+                    if tokens[1] == "None":
+                        fe_onset[tokens[0]] = None
+                    else:
+                        fe_onset[tokens[0]] = float(tokens[1])
 
         if self.testing:
             self._add_cavity_to_linac(cavity_elements, linac, prefix="adamc:", no_fe_gsets=no_fe,
