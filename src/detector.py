@@ -30,7 +30,7 @@ class NDXElectrometer:
     def toggle_data_acquisition(self):
         # Toggle the DAQ off and back on.  There are some circumstances where it may be in "Acquire" mode according to
         # EPICS, but not actually acquiring.
-        logging.info(f"{self.name}: Turn DAQ off, then back on")
+        logger.info(f"{self.name}: Turn DAQ off, then back on")
         self.daq_enabled.put(0, wait=True)
         self.daq_enabled.put(1, wait=True)
 
