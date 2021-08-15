@@ -11,7 +11,8 @@ from state_monitor import StateMonitor
 logger = logging.getLogger(__name__)
 
 
-def run_find_fe_process(zone: Zone, linac: Linac, no_fe_file="./no_fe.tsv", fe_onset_file="./fe_onset.tsv") -> None:
+def run_find_fe_process(zone: Zone, linac: Linac, no_fe_file="./data/no_fe.tsv",
+                        fe_onset_file="./data/fe_onset.tsv") -> None:
     """High level function of measuring field emission onset within a single zone.
 
     This includes linac setup, course 'no FE' search, and fine 'FE onset' search."""
@@ -30,7 +31,6 @@ def run_find_fe_process(zone: Zone, linac: Linac, no_fe_file="./no_fe.tsv", fe_o
 def setup_for_find_fe_process(linac: Linac) -> None:
     """Setup for finding FE onset.  Turn NDX to correct settings and measure background radiation."""
     linac.set_ndx_for_fe_onset()
-    linac.set_gradients(level="low")
     response = input(
         "About to measure NDX radiation and save as baseline background.\nContinue? (n|y): ").lstrip().lower()
     if not response.startswith("y"):
@@ -47,6 +47,7 @@ def find_no_fe_gsets(zone: Zone, linac: Linac, data_file: str, step_size: float 
     """This method finds the highest gradient per-cavity without field emission (at 1 MV/m granularity).
 
     Assumes that background radiation levels have been saved and that the linac is set to a low level without radiation.
+    This "low" level can be 5 MV/m, but it can be higher if we are continuing an interrupted FE onset search.
 
     This is similar to, but different from, finding field emission onset.  Here we set a rough baseline of no FE from
     which we can do a finer search for FE onset.  This is because adjacent cavities can accelerate FE electrons and
@@ -62,60 +63,68 @@ def find_no_fe_gsets(zone: Zone, linac: Linac, data_file: str, step_size: float 
     # Keys are cavity name, values are booleans
     reached_max = {}
     for cavity in zone.cavities.values():
-        if cavity.bypassed:
+        if cavity.bypassed_eff:
             reached_max[cavity.name] = True
             logger.info(f"{cavity.name} is bypassed.  Unable to find no FE gset.")
         else:
             reached_max[cavity.name] = False
 
-    # Run until we've maxed out all of the cavities at some no FE gradient.
-    while not all(reached_max.values()):
-        # Step one cavity up at a time.
-        for cavity in sorted(zone.cavities.values(), key=attrgetter('name')):
+    try:
+        # Run until we've maxed out all of the cavities at some no FE gradient.
+        while not all(reached_max.values()):
+            # Step one cavity up at a time.
+            for cavity in sorted(zone.cavities.values(), key=attrgetter('name')):
 
-            # Skip cavities that have already hit the max - includes bypassed cavities
-            if not reached_max[cavity.name]:
-                # Check that control system is in good state
-                StateMonitor.check_state()
+                # Skip cavities that have already hit the max - includes bypassed cavities
+                if not reached_max[cavity.name]:
+                    # Check that control system is in good state
+                    StateMonitor.check_state()
 
-                # What are the current and next values
-                val = cavity.gset.value
-                next_val = val + step_size
+                    # What are the current and next values
+                    val = cavity.gset.value
+                    next_val = val + step_size
 
-                # We can't push the cavities beyond their ODVH
-                if next_val >= cavity.odvh.value:
-                    next_val = cavity.odvh.value
-                    reached_max[cavity.name] = True
+                    # We can't push the cavities beyond their ODVH
+                    if next_val >= cavity.odvh.value:
+                        next_val = cavity.odvh.value
+                        reached_max[cavity.name] = True
 
-                logger.info(f"Stepping up {cavity.name} {val} -> {next_val}")
-                cavity.set_gradient(next_val)
+                    logger.info(f"Stepping up {cavity.name} {val} -> {next_val}")
+                    cavity.set_gradient(next_val)
 
-                # TODO: Remove this for production code.  Look at API - maybe another way to ensure callbacks finished.
-                # This may just be an artifact of my dumb testing IOC controller.
-                time.sleep(0.05)
+                    # TODO: Remove this for production code.  Look at API - maybe another way to ensure callbacks
+                    # finished.
+                    # This may just be an artifact of my dumb testing IOC controller.
+                    time.sleep(0.05)
 
-                # Measure radiation.  Turn cavity back down if we see anything above background.
-                linac.get_radiation_measurements(3)
-                is_rad, t_stat = linac.is_radiation_above_background(t_stat_threshold=5)
-                if is_rad:
-                    logger.info(f"Found no FE gset for {cavity.name} at {val} MV/m")
-                    logger.info(f"Max radiation t-stat is {t_stat}")
-                    logger.info(f"Set {cavity.name} back to {val}")
+                    # Check that control system is in good state.  Changing gradient can take several seconds
+                    StateMonitor.check_state()
 
-                    reached_max[cavity.name] = True
-                    cavity.set_gradient(val)
-                    cavity.gset_no_fe = val
+                    # Measure radiation.  Turn cavity back down if we see anything above background.
+                    logger.info("Measuring radiation")
+                    linac.get_radiation_measurements(3)
+                    is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=5)
+                    if is_rad:
+                        logger.info(f"Found coarse 'no FE' gset for {cavity.name} at {val} MV/m")
+                        logger.info(f"Max radiation t-stat is {t_stat} at {max_d.name}")
+                        logger.info(f"Set {cavity.name} back to {val}")
 
-                elif reached_max[cavity.name]:
-                    # Implies next_val == cavity.odvh.value, but that float comparison could be misleading.
-                    logger.info(f"Found no FE at {cavity.name} at ODVH of {val} MV/m")
-                    cavity.gset_no_fe = next_val
+                        reached_max[cavity.name] = True
+                        cavity.set_gradient(val)
+                        cavity.gset_no_fe = val
 
-    # Write out the results so that they can be used later.
-    with open(data_file, mode="a") as f:
-        f.write(f"# {zone.name} step_size={step_size} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        for cavity in zone.cavities.values():
-            f.write(f"{cavity.gset.pvname}\t{cavity.gset_no_fe}\n")
+                    elif reached_max[cavity.name]:
+                        # Implies next_val == cavity.odvh.value, but that float comparison could be misleading.
+                        logger.info(f"Found no FE at {cavity.name} at ODVH of {val} MV/m")
+                        cavity.gset_no_fe = next_val
+    finally:
+        # Note that some of these may not be what we
+        logger.info(f"Saving the coarse 'no FE' levels to {data_file}")
+        # Write out the results so that they can be used later.
+        with open(data_file, mode="a") as f:
+            f.write(f"# {zone.name} step_size={step_size} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            for cavity in zone.cavities.values():
+                f.write(f"{cavity.gset.pvname}\t{cavity.gset_no_fe}\n")
 
 
 def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0.125, n_tries: int = 3) -> None:
@@ -128,7 +137,7 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
 
     # Save the starting no_fe values, then walk up 0.2 MV/m until we find FE onset.  Then back to starting value.
     for cavity in zone.cavities.values():
-        if cavity.bypassed:
+        if cavity.bypassed_eff:
             logger.info(f"{cavity.name} is bypassed.  Unable to find field emission onset.  Skipping.")
             continue
 
@@ -140,15 +149,27 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
         # Tracking if we have found FE onset, and the number of attempts we've made at finding it.
         logger.info(f"Finding FE onset for {cavity.name}.")
         found_onset = False
-        count = 0
+        count = 1
 
         # Where to start the initial search.  Note walk_cavity_gradient_up should handle the case where start >= odvh.
         start = cavity.gset_no_fe
 
+        if abs(start - cavity.gset.value) < 0.01:
+            logger.warning(f"Starting fine-grained FE onset check of {cavity.name}.  Start GSET ({cavity.gset.value}"
+                           f" != 'No FE' GSET ({start}).")
+
         # Now try at most three times to detect the FE onset for this cavity
-        while not found_onset or count < n_tries:
-            found_onset = walk_cavity_gradient_up(cavity=cavity, linac=linac, start=start, step_size=step_size)
-            count += 1
+        while not found_onset or count <= n_tries:
+            logger.info(f"Starting FE onset search for {cavity.name}.  Attempt {count} of {n_tries}")
+            try:
+                found_onset = walk_cavity_gradient_up(cavity=cavity, linac=linac, start=start, step_size=step_size)
+            except Exception as exc:
+                logger.error(f"Exception while walking {cavity.name} up.\n{exc}")
+                response = input(f"Something went wrong when walking {cavity.name}.  Try again? ").lstrip().lower()
+                if not response.startswith('y'):
+                    break
+            finally:
+                count += 1
 
         # We we able to find anything after several repeated attempts.  If not, then background radiation has probably
         # changed.  Ask user if we should update it.
@@ -161,6 +182,7 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
                 linac.save_radiation_measurements_as_background()
 
     with open(data_file, mode="a") as f:
+        logger.info(f"Saving FE Onset values to {data_file}.")
         f.write(f"# {zone.name} step_size={step_size} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
         for cavity in zone.cavities.values():
             f.write(f"{cavity.gset.pvname}\t{cavity.gset_fe_onset}\n")
@@ -206,16 +228,17 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
         cavity.set_gradient(next_val)
 
         # Measure radiation.  Turn cavity back down if we see anything above background.
+        logger.info("Taking three radiation measurements")
         linac.get_radiation_measurements(3)
-        is_rad, t_stat = linac.is_radiation_above_background(t_stat_threshold=5)
+        is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=5)
         if is_rad:
-            logger.info(f"Found FE onset for {cavity.name} at {val} MV/m (t-stat = {t_stat}).")
+            logger.info(f"Found FE onset for {cavity.name} at {val} MV/m (t-stat = {t_stat} at {max_d.name}).")
             logger.info(f"Turning cavity down to verify radiation elimination.")
             cavity.set_gradient(val)
             linac.get_radiation_measurements(3)
-            is_rad, t_stat = linac.is_radiation_above_background(t_stat_threshold=5)
+            is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=5)
             if is_rad:
-                logger.info(f"Found radiation when cavity turned down (t-stat = {t_stat}).  Search Failed.")
+                logger.info(f"Found radiation when cavity turned down (t-stat = {t_stat} at {max_d.name}).  Search Failed.")
             else:
                 found_onset = True
                 cavity.gset_fe_onset = val
@@ -239,9 +262,11 @@ def run_gradient_scan(zone: Zone, linac: Linac, avg_time: float, settle_time: fl
         scan_cavity_gradient(cavity=cavity, zone=zone, linac=linac, avg_time=avg_time, settle_time=settle_time,
                              n_levels=n_levels, zone_levels=zone_levels, linac_levels=linac_levels)
 
-def scan_cavity_gradient(cavity: Cavity, zone: Zone, linac: Linac, avg_time: float, settle_time: float, n_levels: int = 3,
-                  zone_levels: List[str] = ('low', 'high', 'high'),
-                  linac_levels: List[str] = ('low', 'high', 'high')) -> None:
+
+def scan_cavity_gradient(cavity: Cavity, zone: Zone, linac: Linac, avg_time: float, settle_time: float,
+                         n_levels: int = 3,
+                         zone_levels: List[str] = ('low', 'high', 'high'),
+                         linac_levels: List[str] = ('low', 'high', 'high')) -> None:
     logger.info(f"Starting gradient scan of {cavity.name}")
     with open("data_log.txt", mode="a") as f:
         zone_names = ','.join([z for z in sorted(linac.zones.keys())])
