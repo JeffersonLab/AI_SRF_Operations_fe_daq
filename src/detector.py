@@ -38,7 +38,7 @@ class NDXElectrometer:
     def set_for_fe_onset(self):
         """ Set the electrometer to the needed settings for determining FE onset"""
         # Use the sensitive capacitor setting (10 pF)
-        self.capacitor_switch.put(10)
+        self.capacitor_switch.put("10pF")
 
         # Make sure that the electrometer is integrating signal for one second when averaging out dose rate
         self.integration_period.put(1)
@@ -48,7 +48,7 @@ class NDXElectrometer:
     def set_for_operations(self):
         """Set the electrometer for normal operations"""
         # Use the less sensitive capacitor setting (1000 pF)
-        self.capacitor_switch.put(1000)
+        self.capacitor_switch.put("1000pF")
 
         # Make sure that the electrometer is integrating signal for one second when averaging out dose rate
         self.integration_period.put(1)

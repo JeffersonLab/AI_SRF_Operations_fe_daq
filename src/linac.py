@@ -277,6 +277,10 @@ class LinacFactory:
             name = e['name']
             p = e['properties']
 
+            # TODO: Skippingfor daq
+            if name in ('NDXNL05', 'NDXNL07'):
+                continue
+
             prefix = ""
             if self.testing:
                 prefix = "adamc:"

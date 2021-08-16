@@ -104,13 +104,20 @@ def find_no_fe_gsets(zone: Zone, linac: Linac, data_file: str, step_size: float 
                     # Measure radiation.  Turn cavity back down if we see anything above background.
                     logger.info("Measuring radiation")
                     linac.get_radiation_measurements(3)
-                    is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=5)
+                    is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=10)
                     if is_rad:
                         logger.info(f"Found coarse 'no FE' gset for {cavity.name} at {val} MV/m")
                         logger.info(f"Max radiation t-stat is {t_stat} at {max_d.name}")
                         logger.info(f"Set {cavity.name} back to {val}")
 
                         reached_max[cavity.name] = True
+                        cavity.set_gradient(val)
+
+                        # We are seeing FE appear as the rest of the zone is stepped up after freezing this
+                        # cavity.  Step down twice
+                        val = val - step_size
+                        cavity.set_gradient(val)
+                        val = val - (step_size/2)
                         cavity.set_gradient(val)
                         cavity.gset_no_fe = val
 
@@ -160,7 +167,7 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
                            f" != 'No FE' GSET ({start}).")
 
         # Now try at most three times to detect the FE onset for this cavity
-        while not found_onset or count <= n_tries:
+        while not found_onset and count <= n_tries:
             logger.info(f"Starting FE onset search for {cavity.name}.  Attempt {count} of {n_tries}")
             try:
                 found_onset = walk_cavity_gradient_up(cavity=cavity, linac=linac, start=start, step_size=step_size)
@@ -172,15 +179,16 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
             finally:
                 count += 1
 
-        # We we able to find anything after several repeated attempts.  If not, then background radiation has probably
-        # changed.  Ask user if we should update it.
-        if not found_onset:
-            logger.warning(f"{cavity.name} could not find FE onset gradient.")
-            response = input("Should we re-baseline background radiation? (n|y): ").lstrip().lower()
-            if response.startswith("y"):
-                logger.warning("Updating background radiation readings with current levels")
-                linac.get_radiation_measurements(10)
-                linac.save_radiation_measurements_as_background()
+            # We we able to find anything after several repeated attempts.  If not, then background radiation has probably
+            # changed.  Ask user if we should update it.  If so, reset the count and do this cavity again.
+            if not found_onset and count > n_tries:
+                logger.warning(f"{cavity.name} could not find FE onset gradient.")
+                response = input("Should we re-baseline background radiation? (n|y): ").lstrip().lower()
+                if response.startswith("y"):
+                    logger.warning("Updating background radiation readings with current levels")
+                    linac.get_radiation_measurements(10)
+                    linac.save_radiation_measurements_as_background()
+                    count = 1
 
     with open(data_file, mode="a") as f:
         logger.info(f"Saving FE Onset values to {data_file}.")
@@ -218,7 +226,7 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
     val = start
 
     # Walk the cavity gradient up in small steps until we see a change in radiation
-    while val <= cavity.odvh.value:
+    while val < cavity.odvh.value:
         next_val = val + step_size
 
         # We can't run the cavities higher than ODVH
@@ -231,19 +239,23 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
         # Measure radiation.  Turn cavity back down if we see anything above background.
         logger.info("Taking three radiation measurements")
         linac.get_radiation_measurements(3)
-        is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=5)
+        is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=10)
         if is_rad:
             logger.info(f"Found FE onset for {cavity.name} at {val} MV/m (t-stat = {t_stat} at {max_d.name}).")
             logger.info(f"Turning cavity down to verify radiation elimination.")
             cavity.set_gradient(val)
             linac.get_radiation_measurements(3)
-            is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=5)
+            is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=10)
             if is_rad:
                 logger.info(f"Found radiation when cavity turned down (t-stat = {t_stat} at {max_d.name}).  Search Failed.")
             else:
                 found_onset = True
                 cavity.gset_fe_onset = val
                 logger.info(f"Found no radiation when cavity turned down.  Search succeeded.")
+                # Turning back down to keep base line "safe"
+                # TODO: Make this smarter.
+                logger.info(f"Step {cavity.name} back down from {val} to {val - 1}")
+                cavity.set_gradient(val - 1)
             break
 
         # Read in the current GSET for the next loop iteration
@@ -252,21 +264,22 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
     return found_onset
 
 
-
-
-def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, step_size: int = 1):
+def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, step_size: float = 1, settle_time: float = 6):
     """Turn down one cavity at a time in a random order.  Don't jot a cavity twice until all have been done once.
 
-    This procedure does not support a settle time because we expect our Cavity.set_gradient call to wait six seconds for
-    cryo which is a little longer than our expected settle time.
+    This procedure does not supports a settle time of 6 as we need Cavity.set_gradient call to wait six seconds for
+    cryo which is a little longer than what we'd want otherwise.
     """
-    with open("data_log.txt", mode="a") as f:
+    with open("./data/data_log.txt", mode="a") as f:
         zone_names = ','.join([z for z in sorted(linac.zones.keys())])
-        f.write(f"# active zones: {zone_names}\n")
+        f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
         f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
+
+        logger.info("Setting NDX to operations settings")
+        linac.set_ndx_for_operations()
         logger.info(f"Starting gradient scan of {zone_names}")
 
-        cavities = linac.cavities.keys().copy()
+        cavities = list(linac.cavities.values()).copy()
         random.shuffle(cavities)
 
         for cavity in cavities:
@@ -282,11 +295,11 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, step_size: i
                 StateMonitor.check_state()
 
                 # Update gradient.  This should wait for gradient ramping and some time for cryo
-                cavity.set_gradient(gset=new_gset, settle_time=6)
+                cavity.set_gradient(gset=new_gset, settle_time=settle_time)
 
                 # We expect set_gradient to wait six seconds for cryo.  This is plenty of settle time for us.
                 settle_end = datetime.now()
-                settle_start = settle_end - timedelta(seconds=6)
+                settle_start = settle_end - timedelta(seconds=settle_time)
 
 
                 # If we're given a settle time, then sleep in small increments until that time is up.  Channel

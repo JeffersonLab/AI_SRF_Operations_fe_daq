@@ -105,7 +105,7 @@ def setup_cavities() -> None:
         pv_name = f"{prefix}{epics_name}GSET"
         pv_list.append(pv_name)
         if cavity_type == "C100":
-            val_list.append(5)
+            val_list.append(10)
         elif cavity_type == "C75":
             val_list.append(5)
         elif cavity_type == "C50":

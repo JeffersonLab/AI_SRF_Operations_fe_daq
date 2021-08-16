@@ -44,7 +44,7 @@ def hv_read_back_cb(pvname: str, value: float, **kwargs) -> None:
         logger.error(f"{pvname} is wrong {value} (!= 1000 +/- 10%).")
     else:
         StateMonitor.hv_good(pvname=pvname)
-        logger.info(f"{pvname} is ok {value} (== 1000 +/- 10%).")
+        #logger.info(f"{pvname} is ok {value} (== 1000 +/- 10%).")
 
 
 def rf_on_cb(pvname: str, value: float, **kwargs) -> None:
