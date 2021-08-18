@@ -134,6 +134,8 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
     """
 
     logger.info(f"Finding FE onsets for cavities in {zone.name}")
+    with open(data_file, mode="a") as f:
+        f.write(f"# {zone.name} step_size={step_size} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
     # Save the starting no_fe values, then walk up 0.2 MV/m until we find FE onset.  Then back to starting value.
     for cavity in zone.cavities.values():
@@ -171,8 +173,8 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
             finally:
                 count += 1
 
-            # We we able to find anything after several repeated attempts.  If not, then background radiation has probably
-            # changed.  Ask user if we should update it.  If so, reset the count and do this cavity again.
+            # We we able to find anything after several repeated attempts.  If not, then background radiation has
+            # probably changed.  Ask user if we should update it.  If so, reset the count and do this cavity again.
             if not found_onset and count > n_tries:
                 logger.warning(f"{cavity.name} could not find FE onset gradient.")
                 response = input("Should we re-baseline background radiation? (n|y): ").lstrip().lower()
@@ -180,12 +182,14 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
                     logger.warning("Updating background radiation readings with current levels")
                     linac.get_radiation_measurements(10)
                     linac.save_radiation_measurements_as_background()
+
+                response = input(f"Should we retry {cavity.name} (n|y): ").lstrip().lower()
+                if response.startswith("y"):
+                    logger.info(f"Restarting fine-grained FE onset check of {cavity.name}.")
                     count = 1
 
-    with open(data_file, mode="a") as f:
-        logger.info(f"Saving FE Onset values to {data_file}.")
-        f.write(f"# {zone.name} step_size={step_size} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-        for cavity in zone.cavities.values():
+        with open(data_file, mode="a") as f:
+            logger.info(f"Saving FE Onset value to {data_file} for {cavity.name}.")
             f.write(f"{cavity.gset.pvname}\t{cavity.gset_fe_onset}\n")
 
 
