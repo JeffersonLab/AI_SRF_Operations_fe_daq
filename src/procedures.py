@@ -267,9 +267,26 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
 def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, step_size: float = 1, settle_time: float = 6):
     """Turn down one cavity at a time in a random order.  Don't jot a cavity twice until all have been done once.
 
-    This procedure does not supports a settle time of 6 as we need Cavity.set_gradient call to wait six seconds for
+    This procedure supports a settle time of 6 as we need Cavity.set_gradient call to wait six seconds for
     cryo which is a little longer than what we'd want otherwise.
+
+    Args:
+        linac:  The linac to operate on.
+        avg_time:  How long to pause for mya to record data after the systems settle.  Typically used to create a less
+                   noisy average of the signal.
+        step_size:  The downward step size in MV/m used to reduce the gradient of a cavity.  Only positive numbers
+                    supported (positive number will lower GSET).
+        settle_time:  The amount of time to allow systems to settle after making a change to gradient.  Here this
+                      time is handled by the Cavity being changed and includes the time for cryo to adjust.  For
+                      step_size of 1 MV/m, settle time should be 6.
     """
+
+    if step_size < 0 or step_size > 1:
+        raise ValueError("Only step_size between 0 and 1 MV/m are supported.")
+
+    if settle_time < 6:
+        raise ValueError("settle_time is restricted to at least 6 seconds to protect cryogenic systems.")
+
     with open("./data/data_log.txt", mode="a") as f:
         zone_names = ','.join([z for z in sorted(linac.zones.keys())])
         f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
