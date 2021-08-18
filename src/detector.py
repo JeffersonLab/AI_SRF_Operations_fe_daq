@@ -25,7 +25,8 @@ class NDXElectrometer:
         # Do this check once at the start.  The rest of the time we monitor the read back in the StateMonitor to make
         # sure the actual value is close.
         if self.hv_set_point.get(use_monitor=False) != 1000:
-            raise RuntimeError(f"{self.name} HV set point ({self.hv_set_point.pvname} != 1000")
+            raise RuntimeError(
+                f"{self.name} HV set point {self.hv_set_point.pvname} = {self.hv_set_point.value} (!= 1000)")
 
     def toggle_data_acquisition(self):
         # Toggle the DAQ off and back on.  There are some circumstances where it may be in "Acquire" mode according to
@@ -33,7 +34,6 @@ class NDXElectrometer:
         logger.info(f"{self.name}: Turn DAQ off, then back on")
         self.daq_enabled.put(0, wait=True)
         self.daq_enabled.put(1, wait=True)
-
 
     def set_for_fe_onset(self):
         """ Set the electrometer to the needed settings for determining FE onset"""
