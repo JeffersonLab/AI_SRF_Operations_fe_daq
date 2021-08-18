@@ -190,7 +190,8 @@ class LinacFactory:
         self.ced_workspace = ced_workspace
         self.testing = testing
 
-    def create_linac(self, name: str, zone_names: List[str] = None, detector_names: List[str] = None):
+    def create_linac(self, name: str, zone_names: List[str] = None, electrometer_names: List[str] = None,
+                     detector_names: List[str] = None):
         """Construct a Linac.  The name should match the Linac's Segmask name without the 'A_' prefix.
         
         Segmask name format  is NorthLinac, SouthLinac.
@@ -198,7 +199,7 @@ class LinacFactory:
         linac = Linac(name)
         self._setup_zones(linac=linac, zone_names=zone_names)
         self._setup_cavities(linac)
-        self._setup_ndx(linac, detector_names=detector_names)
+        self._setup_ndx(linac, electrometer_names=electrometer_names, detector_names=detector_names)
         return linac
 
     def _setup_zones(self, linac, zone_names: List[str] = None) -> None:
@@ -261,7 +262,7 @@ class LinacFactory:
         else:
             self._add_cavity_to_linac(cavity_elements, linac, no_fe_gsets=no_fe, fe_onset_gsets=fe_onset)
 
-    def _setup_ndx(self, linac: Linac, detector_names: List[str] = None) -> None:
+    def _setup_ndx(self, linac: Linac, electrometer_names: List[str], detector_names: List[str] = None) -> None:
         """Creates NDX related objects from CED and adds them to the supplied Linac."""
 
         # Grab the NDX Electrometers for the linac.  Then get the detectors that are associated with those.
@@ -277,22 +278,20 @@ class LinacFactory:
             name = e['name']
             p = e['properties']
 
-            # TODO: Skippingfor daq
-            if name in ('NDXNL05', 'NDXNL07'):
-                continue
+            # Only process electrometers that are requested (or all in nothing was specified
+            if electrometer_names is None or name in electrometer_names:
+                prefix = ""
+                if self.testing:
+                    prefix = "adamc:"
 
-            prefix = ""
-            if self.testing:
-                prefix = "adamc:"
-
-            logger.info(f"Adding {name} to {linac.name}'s electrometers")
-            ndxe = NDXElectrometer(name=name, epics_name=f"{prefix}{name}")
-            linac.ndx_electrometers[name] = ndxe
-            for d in p['Detectors'].values():
-                if len(d) > 0:
-                    if detector_names is None or d in detector_names:
-                        logger.info(f"Adding {name} to {linac.name}'s NDX detectors")
-                        linac.ndx_detectors[d] = NDXDetector(name=d, epics_name=f"{prefix}{d}", electrometer=ndxe)
+                logger.info(f"Adding {name} to {linac.name}'s electrometers")
+                ndxe = NDXElectrometer(name=name, epics_name=f"{prefix}{name}")
+                linac.ndx_electrometers[name] = ndxe
+                for d in p['Detectors'].values():
+                    if len(d) > 0:
+                        if detector_names is None or d in detector_names:
+                            logger.info(f"Adding {name} to {linac.name}'s NDX detectors")
+                            linac.ndx_detectors[d] = NDXDetector(name=d, epics_name=f"{prefix}{d}", electrometer=ndxe)
 
     @staticmethod
     def _get_ced_elements(ced_url: str) -> List[Dict]:
