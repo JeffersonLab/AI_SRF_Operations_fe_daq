@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Union
 
 import epics
 import logging
@@ -81,6 +82,42 @@ class Cavity:
     def get_low_gset(self):
         """Return the appropriate lowest no FE gradient.  Either the lowest stable or the highest known without FE."""
         return self.gset_min if self.gset_no_fe is None else self.gset_no_fe
+
+    def walk_gradient(self, gset: float, step_size: float = 1, **kwargs) -> None:
+        """Move the gradient of the cavity to gset in steps.
+
+        This always waits for the gradient to ramp, but allows for user specified settle_time and ramping timeouts.
+
+        Args:
+            gset:  The target gradient set point
+            step_size:  The maximum size steps to make in MV/m by absolute value.
+
+        Additional kwargs are passed to set_gradient.
+        """
+
+        # Determine step direction
+        actual_gset = self.gset.get(use_monitor=False)
+        if gset >= actual_gset:
+            step_dir = 1
+        else:
+            step_dir = -1
+
+        if gset > self.odvh.value:
+            msg = f"Requested {self.name} gradient higher than ODVH {self.odvh.value}."
+            logger.error(msg)
+            raise ValueError(msg)
+
+        logger.info(f"Walking {self.name} from {actual_gset} to {gset} in {step_size} MV/m steps.")
+
+        # Walk step size until we're within a single step
+        while abs(gset - actual_gset) > step_size:
+            next_gset = actual_gset + (step_dir * step_size)
+            self.set_gradient(gset=next_gset, **kwargs)
+            actual_gset = self.gset.get(use_monitor=False)
+
+        # We should be within a single step here.
+        self.set_gradient(gset=gset, **kwargs)
+
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=10):
         """Set a cavity's gradient and wait for supporting systems to compensate for the change.
