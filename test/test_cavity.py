@@ -1,3 +1,4 @@
+import threading
 import time
 from datetime import datetime
 from threading import Thread
@@ -54,6 +55,16 @@ class TestCavity(TestCase):
         self.assertTrue(delta > max_val, f"Jiggled too much.  Observed max jiggle {max_val} (>{delta})")
 
     def test_walk_gradient(self):
+
+        values_lock = threading.Lock()
+        values = {}
+        def track_values_cb(pvname, value, **kwargs):
+            with values_lock:
+                if pvname not in values.keys():
+                    values[pvname] = [value]
+                else:
+                    values[pvname].append(value)
+
         cav = get_cavity()
 
         # Can't walk higher than ODVH, and it shouldn't even try
@@ -63,9 +74,17 @@ class TestCavity(TestCase):
         post_walk_gset = cav.gset.value
 
         self.assertEqual(pre_walk_gset, post_walk_gset,
-                         "walk_gradient tried to change GSET with requset higher than ODVH")
+                         "walk_gradient tried to change GSET with request higher than ODVH")
 
+        start = cav.gset.value
+        exp = [start - 1, start - 2, start - 2.5]
+        cav.gset.add_callback(track_values_cb)
+        cav.walk_gradient(gset=cav.gset.value-2.5, settle_time=0.01, wait_for_ramp=False)
 
+        with values_lock:
+            result = values[cav.gset.pvname].copy()
+
+        self.assertListEqual(exp, result)
 
 
     def test_set_gradient(self):
