@@ -10,10 +10,14 @@ record(ao, "adamc:$(D2)_nCur") {
 record(ao, "adamc:$(D2)_gCur") {
 }
 
-# E.g., E = NDXNL05
+# E.g., E = NDX1L05
 record(ao, "adamc:$(E)_RESET") {
 }
-record(ao, "adamc:$(E)_CAPACITOR_SW") {
+#record(ao, "adamc:$(E)_CAPACITOR_SW") {
+#}
+record(bo, "adamc:$(E)_CAPACITOR_SW") {
+  field(ZNAM, "10pF")
+  field(ONAM, "1000pF")
 }
 record(ao, "adamc:$(E)_PERIOD") {
 }

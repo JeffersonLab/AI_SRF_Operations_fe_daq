@@ -1,13 +1,13 @@
 # Soft IOC related PVs
 
 # NDX PVs
-dbLoadRecords("../db/ndx.db", "D1=INX0L04,D2=INX0L05,E=NDXIN03")
-dbLoadRecords("../db/ndx.db", "D1=INX1L05,D2=INX1L06,E=NDXNL05")
-dbLoadRecords("../db/ndx.db", "D1=INX1L07,D2=INX1L08,E=NDXNL07")
-dbLoadRecords("../db/ndx.db", "D1=INX1L22,D2=INX1L23,E=NDXNL21")
-dbLoadRecords("../db/ndx.db", "D1=INX1L24,D2=INX1L25,E=NDXNL23")
-dbLoadRecords("../db/ndx.db", "D1=INX1L26,D2=INX1L27,E=NDXNL25")
-dbLoadRecords("../db/ndx.db", "D1=INX1S01,D2=INX1S02,E=NDXNL27")
+dbLoadRecords("../db/ndx.db", "D1=INX0L04,D2=INX0L05,E=NDX0L04")
+dbLoadRecords("../db/ndx.db", "D1=INX1L05,D2=INX1L06,E=NDX1L05")
+dbLoadRecords("../db/ndx.db", "D1=INX1L07,D2=INX1L08,E=NDX1L07")
+dbLoadRecords("../db/ndx.db", "D1=INX1L22,D2=INX1L23,E=NDX1L22")
+dbLoadRecords("../db/ndx.db", "D1=INX1L24,D2=INX1L25,E=NDX1L24")
+dbLoadRecords("../db/ndx.db", "D1=INX1L26,D2=INX1L27,E=NDX1L26")
+dbLoadRecords("../db/ndx.db", "D1=INX1S01,D2=INX1S02,E=NDX1S01")
 
 # RF PVs
 dbLoadRecords("../db/pvs.db", "A=121")
