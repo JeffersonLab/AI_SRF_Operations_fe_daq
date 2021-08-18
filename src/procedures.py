@@ -93,11 +93,6 @@ def find_no_fe_gsets(zone: Zone, linac: Linac, data_file: str, step_size: float 
                     logger.info(f"Stepping up {cavity.name} {val} -> {next_val}")
                     cavity.set_gradient(next_val)
 
-                    # TODO: Remove this for production code.  Look at API - maybe another way to ensure callbacks
-                    # finished.
-                    # This may just be an artifact of my dumb testing IOC controller.
-                    time.sleep(0.05)
-
                     # Check that control system is in good state.  Changing gradient can take several seconds
                     StateMonitor.check_state()
 
@@ -106,20 +101,17 @@ def find_no_fe_gsets(zone: Zone, linac: Linac, data_file: str, step_size: float 
                     linac.get_radiation_measurements(3)
                     is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=10)
                     if is_rad:
+                        # We've had some trouble where FE shows up later, despite turning this back down one step.
+                        # Now we turn it down to 2.5 below the level where we saw FE.
+                        no_fe = max(val - 1.5, 5)
                         logger.info(f"Found coarse 'no FE' gset for {cavity.name} at {val} MV/m")
                         logger.info(f"Max radiation t-stat is {t_stat} at {max_d.name}")
-                        logger.info(f"Set {cavity.name} back to {val}")
+                        logger.info(f"Saving cautionary 'no FE' gset of {no_fe} MV/m")
+                        logger.info(f"Turning {cavity.name} down to cautionary {no_fe} MV/m")
 
                         reached_max[cavity.name] = True
-                        cavity.set_gradient(val)
-
-                        # We are seeing FE appear as the rest of the zone is stepped up after freezing this
-                        # cavity.  Step down twice
-                        val = val - step_size
-                        cavity.set_gradient(val)
-                        val = val - (step_size/2)
-                        cavity.set_gradient(val)
-                        cavity.gset_no_fe = val
+                        cavity.gset_no_fe = no_fe
+                        cavity.walk_gradient(no_fe)
 
                     elif reached_max[cavity.name]:
                         # Implies next_val == cavity.odvh.value, but that float comparison could be misleading.
