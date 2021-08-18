@@ -4,6 +4,8 @@ from threading import Thread
 from unittest import TestCase
 import logging
 
+import epics
+
 from cavity import Cavity
 
 # logging.basicConfig(level=logging.DEBUG)
@@ -26,7 +28,8 @@ def get_gradient_step_size(cavity: Cavity):
     return step
 
 
-def stop_ramping(pv, delay=0.5):
+def stop_ramping(pvname, delay=0.5):
+    pv = epics.PV(pvname)
     time.sleep(delay)
     pv.put(0)
 
@@ -49,6 +52,21 @@ class TestCavity(TestCase):
             if abs(tmp) > max_val:
                 max_val = tmp
         self.assertTrue(delta > max_val, f"Jiggled too much.  Observed max jiggle {max_val} (>{delta})")
+
+    def test_walk_gradient(self):
+        cav = get_cavity()
+
+        # Can't walk higher than ODVH, and it shouldn't even try
+        pre_walk_gset = cav.gset.value
+        with self.assertRaises(Exception) as context:
+            cav.walk_gradient(100)
+        post_walk_gset = cav.gset.value
+
+        self.assertEqual(pre_walk_gset, post_walk_gset,
+                         "walk_gradient tried to change GSET with requset higher than ODVH")
+
+
+
 
     def test_set_gradient(self):
         cav = get_cavity()
@@ -85,7 +103,7 @@ class TestCavity(TestCase):
 
         # Test that we do wait for ramping to be done
         cav.stat1.put(2048)
-        t1 = Thread(target=stop_ramping, args=(cav.stat1, ramp_time))
+        t1 = Thread(target=stop_ramping, args=(cav.stat1.pvname, ramp_time))
         start = datetime.now()
         t1.start()
         cav.set_gradient(gset + step, settle_time=0)
@@ -104,7 +122,7 @@ class TestCavity(TestCase):
 
         # Test that we do wait for ramping to be done
         cav.stat1.put(2048)
-        t1 = Thread(target=stop_ramping, args=(cav.stat1, ramp_time))
+        t1 = Thread(target=stop_ramping, args=(cav.stat1.pvname, ramp_time))
         t1.start()
         cav.set_gradient(gset + step, settle_time=0, ramp_timeout=0.3)
         t1.join()
