@@ -108,7 +108,7 @@ class Linac:
         for ndxe in self.ndx_electrometers.values():
             ndxe.set_for_operations()
 
-    def is_radiation_above_background(self, t_stat_threshold: float = 5) -> Tuple[bool, float, str]:
+    def is_radiation_above_background(self, t_stat_threshold: float = 5) -> Tuple[bool, float, NDXDetector]:
         """Check all fo the NDX detectors for sign of radiation.
 
         Each individual signal is checked.  If any one of them reports a t-stat > t_stat_threshold, return true.
