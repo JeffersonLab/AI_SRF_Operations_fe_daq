@@ -31,7 +31,7 @@ def turned_off_cb(pvname, value, **kwargs):
 class TestNDXElectrometer(TestCase):
 
     def test_toggle_data_acquisition(self):
-        e = NDXElectrometer(name="NDXNL23", epics_name="adamc:NDXNL23")
+        e = NDXElectrometer(name="NDX1L24", epics_name="adamc:NDX1L24")
 
         if not e.daq_enabled.wait_for_connection(timeout=2):
             self.fail(msg=f"Could not connect to {e.daq_enabled.pvname}")
@@ -51,24 +51,24 @@ class TestNDXElectrometer(TestCase):
         self.assertTrue(ndxe_toggled_off[e.daq_enabled.pvname])
 
     def test_set_for_fe_onset(self):
-        e = NDXElectrometer(name="NDXNL23", epics_name="adamc:NDXNL23")
+        e = NDXElectrometer(name="NDX1L24", epics_name="adamc:NDX1L24")
 
         e.capacitor_switch.put(1000, wait=True)
         e.integration_period.put(2, wait=True)
 
         e.set_for_fe_onset()
-        self.assertEqual(10, e.capacitor_switch.get(use_monitor=False))
+        self.assertEqual("10pF", e.capacitor_switch.get(use_monitor=False, as_string=True))
         self.assertEqual(1, e.integration_period.get(use_monitor=False))
         self.assertEqual(1, e.daq_enabled.get(use_monitor=False))
 
     def test_set_for_operations(self):
-        e = NDXElectrometer(name="NDXNL23", epics_name="adamc:NDXNL23")
+        e = NDXElectrometer(name="NDX1L24", epics_name="adamc:NDX1L24")
 
         e.capacitor_switch.put(10, wait=True)
         e.integration_period.put(2, wait=True)
 
         e.set_for_operations()
-        self.assertEqual(1000, e.capacitor_switch.get(use_monitor=False))
+        self.assertEqual("1000pF", e.capacitor_switch.get(use_monitor=False, as_string=True))
         self.assertEqual(1, e.integration_period.get(use_monitor=False))
         self.assertEqual(1, e.daq_enabled.get(use_monitor=False))
 

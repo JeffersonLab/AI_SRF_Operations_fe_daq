@@ -120,7 +120,7 @@ class TestStateMonitor(TestCase):
             StateMonitor.monitor(duration=0, user_input=False)
 
         # Check that the StateMonitor sees bad HV
-        ndxe = NDXElectrometer(name="NDXNL05", epics_name="adamc:NDXNL05")
+        ndxe = NDXElectrometer(name="NDX1L05", epics_name="adamc:NDX1L05")
         ndxe.hv_read_back.put(0, wait=True)
         time.sleep(0.01)
         with self.assertRaises(Exception) as context:
