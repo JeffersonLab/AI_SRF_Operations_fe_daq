@@ -19,8 +19,8 @@ def main() -> int:
                         help="Which linac to use.  Must match CED SegMask, e.g., NorthLinac")
 
     subparsers = parser.add_subparsers(dest="command")
-    onset = subparsers.add_parser(title="fe_onset", help="Scan a zone for radiation/FE onset")
-    gradient = subparsers.add_parser(title="gradient_scan", help="Investigate gradient parameter space of set of zones")
+    onset = subparsers.add_parser("fe_onset", help="Scan a zone for radiation/FE onset")
+    gradient = subparsers.add_parser("gradient_scan", help="Investigate gradient parameter space of set of zones")
 
     onset.add_argument('-z', '--zone', help='The primary zone to test', required=True)
     onset.add_argument('-d', '--detectors', nargs='*',
@@ -78,7 +78,7 @@ def main() -> int:
             # Go find those FE Onsets
             procedures.run_find_fe_process(zone, linac)
 
-        if args.mode == 'grad_scan':
+        elif args.command == 'gradient_scan':
 
             # Pull off the arguments this mode uses
             linac_zones = args.linac_zones
@@ -92,8 +92,12 @@ def main() -> int:
 
             procedures.run_gradient_scan_levelized_walk(linac=linac, avg_time=average_time, step_size=step_size)
 
-        # Put the PSETs back where you found them.
-        linac.restore_psets()
+            # Put the PSETs back where you found them.
+            linac.restore_psets()
+
+        else:
+            raise ValueError("Command required. fe_onset, gradient_scan")
+
     except Exception as ex:
         print("Fatal exception raised.  Exiting")
         print(ex)
