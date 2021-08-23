@@ -192,6 +192,9 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
             logger.info(f"Saving FE Onset value to {data_file} for {cavity.name}.")
             f.write(f"{cavity.gset.pvname}\t{cavity.gset_fe_onset}\n")
 
+        logger.info(f"Walking {cavity.name} down to 'no FE' (from {cavity.gset.value} to {cavity.gset_no_fe}")
+        cavity.walk_gradient(cavity.gset_no_fe)
+
 
 def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_size: float) -> bool:
     """This walks an individual cavity's gradient up until radiation is seen on an NDX detector.
@@ -248,10 +251,6 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
                 found_onset = True
                 cavity.gset_fe_onset = val
                 logger.info(f"Found no radiation when cavity turned down.  Search succeeded.")
-                # Turning back down to keep base line "safe"
-                # TODO: Make this smarter.
-                logger.info(f"Step {cavity.name} back down from {val} to {val - 1}")
-                cavity.set_gradient(val - 1)
             break
 
         # Read in the current GSET for the next loop iteration
@@ -260,7 +259,8 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
     return found_onset
 
 
-def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, step_size: float = 1, settle_time: float = 6):
+def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: int, step_size: float = 1,
+                                     settle_time: float = 6):
     """Turn down one cavity at a time in a random order.  Don't jot a cavity twice until all have been done once.
 
     This procedure supports a settle time of 6 as we need Cavity.set_gradient call to wait six seconds for
@@ -270,6 +270,7 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, step_size: f
         linac:  The linac to operate on.
         avg_time:  How long to pause for mya to record data after the systems settle.  Typically used to create a less
                    noisy average of the signal.
+        num_steps: How many times should we walk down the zones.
         step_size:  The downward step size in MV/m used to reduce the gradient of a cavity.  Only positive numbers
                     supported (positive number will lower GSET).
         settle_time:  The amount of time to allow systems to settle after making a change to gradient.  Here this
@@ -277,74 +278,78 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, step_size: f
                       step_size of 1 MV/m, settle time should be 6.
     """
 
+    if num_steps < 1:
+        raise ValueError("num_steps must be a positive integer.")
+
     if step_size < 0 or step_size > 1:
         raise ValueError("Only step_size between 0 and 1 MV/m are supported.")
 
     if settle_time < 6:
         raise ValueError("settle_time is restricted to at least 6 seconds to protect cryogenic systems.")
 
-    with open("./data/data_log.txt", mode="a") as f:
-        zone_names = ','.join([z for z in sorted(linac.zones.keys())])
-        f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
-        f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
+    for i in range(num_steps):
+        logger.info(f"Running iteration {i+1} of {num_steps}")
+        with open("./data/data_log.txt", mode="a") as f:
+            zone_names = ','.join([z for z in sorted(linac.zones.keys())])
+            f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
+            f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
 
-        logger.info("Setting NDX to operations settings")
-        linac.set_ndx_for_operations()
-        logger.info(f"Starting gradient scan of {zone_names}")
+            logger.info("Setting NDX to operations settings")
+            linac.set_ndx_for_operations()
+            logger.info(f"Starting gradient scan of {zone_names}")
 
-        cavities = list(linac.cavities.values()).copy()
-        random.shuffle(cavities)
+            cavities = list(linac.cavities.values()).copy()
+            random.shuffle(cavities)
 
-        for cavity in cavities:
-            try:
-                logger.info("Jiggling linac phases within +/- 5 degrees of initial")
-                linac.jiggle_psets(5.0)
+            for cavity in cavities:
+                try:
+                    logger.info("Jiggling linac phases within +/- 5 degrees of initial")
+                    linac.jiggle_psets(5.0)
 
-                gset = cavity.gset.value
-                new_gset = gset - step_size
-                logger.info(f"Stepping down {cavity.name} from {gset} -> {new_gset}")
+                    gset = cavity.gset.value
+                    new_gset = gset - step_size
+                    logger.info(f"Stepping down {cavity.name} from {gset} -> {new_gset}")
 
-                # Check that we're good prior to making any changes
-                StateMonitor.check_state()
+                    # Check that we're good prior to making any changes
+                    StateMonitor.check_state()
 
-                # Update gradient.  This should wait for gradient ramping and some time for cryo
-                cavity.set_gradient(gset=new_gset, settle_time=settle_time)
+                    # Update gradient.  This should wait for gradient ramping and some time for cryo
+                    cavity.set_gradient(gset=new_gset, settle_time=settle_time)
 
-                # We expect set_gradient to wait six seconds for cryo.  This is plenty of settle time for us.
-                settle_end = datetime.now()
-                settle_start = settle_end - timedelta(seconds=settle_time)
+                    # We expect set_gradient to wait six seconds for cryo.  This is plenty of settle time for us.
+                    settle_end = datetime.now()
+                    settle_start = settle_end - timedelta(seconds=settle_time)
 
+                    # If we're given a settle time, then sleep in small increments until that time is up.  Channel
+                    # Access should be running in a different thread, but documentation was hazy about if this was
+                    # needed.  This also checks the state of the control system and throws if there is a problem.
+                    # logger.info(f"Waiting on settle time ({settle_time} seconds)")
+                    # settle_start, settle_end = StateMonitor.monitor(duration=settle_time)
 
-                # If we're given a settle time, then sleep in small increments until that time is up.  Channel
-                # Access should be running in a different thread, but documentation was hazy about if this was
-                # needed.  This also checks the state of the control system and throws if there is a problem.
-                # logger.info(f"Waiting on settle time ({settle_time} seconds)")
-                # settle_start, settle_end = StateMonitor.monitor(duration=settle_time)
+                    logger.info(f"Waiting on averaging time ({avg_time} seconds)")
+                    avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
 
-                logger.info(f"Waiting on averaging time ({avg_time} seconds)")
-                avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
+                    # Write out sample time to file
+                    fmt = "%Y-%m-%d %H:%M:%S.%f"
+                    settle_start_str = settle_start.strftime(fmt)
+                    settle_end_str = settle_end.strftime(fmt)
+                    avg_start_str = avg_start.strftime(fmt)
+                    avg_end_str = avg_end.strftime(fmt)
 
-                # Write out sample time to file
-                fmt = "%Y-%m-%d %H:%M:%S.%f"
-                settle_start_str = settle_start.strftime(fmt)
-                settle_end_str = settle_end.strftime(fmt)
-                avg_start_str = avg_start.strftime(fmt)
-                avg_end_str = avg_end.strftime(fmt)
+                    # Write out the timestamps for this sample
+                    logger.info("Writing to data log")
+                    f.write(
+                        f"{settle_start_str},{settle_end_str},{avg_start_str},{avg_end_str},{settle_time},"
+                        f"{avg_time},{cavity.name},{cavity.epics_name}\n")
+                    f.flush()
 
-                # Write out the timestamps for this sample
-                logger.info("Writing to data log")
-                f.write(
-                    f"{settle_start_str},{settle_end_str},{avg_start_str},{avg_end_str},{settle_time},"
-                    f"{avg_time},{cavity.name},{cavity.epics_name}\n")
-                f.flush()
-
-            except Exception as ex:
-                msg = f"Exception occurred during gradient scan\n{ex}"
-                logger.error(msg)
-                response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
-                if not response.startswith('y'):
-                    logger.info("Exiting after error based on user response.")
-                    raise ex
+                except Exception as ex:
+                    msg = f"Exception occurred during gradient scan\n{ex}"
+                    logger.error(msg)
+                    response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
+                    if not response.startswith('y'):
+                        logger.info("Exiting after error based on user response.")
+                        raise ex
 
 #
 # Don't use these.  They will wreck the cryo system with all of the massive gyrations.
