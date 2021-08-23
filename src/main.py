@@ -29,7 +29,7 @@ def main() -> int:
                        help='Selection of NDX electrometers available in zone\'s linac to include in test.  Also '
                             'excludes associated detectors.  All if empty.')
 
-    gradient.add_argument('-z, --zones', nargs="*", required=True,
+    gradient.add_argument('--linac_zones', nargs="+", required=True,
                           help="Selection of zones from linac that will be included in test. All if empty")
     # parser.add_argument('-s', '--settle-time', default=5,
     #                     help="How long in seconds to let CEBAF sit after making changes to RF")
@@ -81,16 +81,18 @@ def main() -> int:
         elif args.command == 'gradient_scan':
 
             # Pull off the arguments this mode uses
-            linac_zones = args.linac_zones
+            zone_names = args.linac_zones
             average_time = float(args.average_time)
             step_size = float(args.step_size)
+            num_steps = int(args.num_steps)
             # settle_time = args.settle_time
 
             # Setup the Linac and Zone objects for the task at hand
             logger.info("Creating linac")
-            linac = LinacFactory(testing=testing).create_linac(name=linac_name, zone_names=linac_zones)
+            linac = LinacFactory(testing=testing).create_linac(name=linac_name, zone_names=zone_names)
 
-            procedures.run_gradient_scan_levelized_walk(linac=linac, avg_time=average_time, step_size=step_size)
+            procedures.run_gradient_scan_levelized_walk(linac=linac, avg_time=average_time, num_steps=num_steps,
+                                                        step_size=step_size)
 
             # Put the PSETs back where you found them.
             linac.restore_psets()
