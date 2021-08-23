@@ -13,24 +13,6 @@ logger = logging.getLogger(__name__)
 def main() -> int:
     logger.info("Starting main")
 
-    # TODO: Break this out into subparsers for the different modes
-    # parser = argparse.ArgumentParser(description='Run data collection for Cavity Field Emission project')
-    # parser.add_argument('-z', '--zone', help='The primary zone to test')
-    # parser.add_argument('-l', '--linac', required=True,
-    #                     help="Which linac to use.  Must match CED SegMask, e.g., NorthLinac")
-    # parser.add_argument('--linac_zones', nargs="*",
-    #                     help="Selection of zones from linac that will be included in test. All if empty")
-    # parser.add_argument('-d', '--detectors', nargs='*',
-    #                     help='Selection of NDX detectors (whose electrometer is from linac) to include in test.'
-    #                          '  All if empty.')
-    # parser.add_argument('-m', '--mode', help="The data collection mode to run", required=True,
-    #                     choices=['fe_onset', 'g_scan'])
-    # parser.add_argument('-t', '--testing', help="Run in test mode with 'adamc:' EPICS prefix.", action='store_true')
-    # # parser.add_argument('-s', '--settle-time', default=5,
-    # #                     help="How long in seconds to let CEBAF sit after making changes to RF")
-    # parser.add_argument('-a', '--average-time', default=3,
-    #                     help="How many seconds of data should we allow the archiver to collect to average results")
-
     parser = argparse.ArgumentParser(description='Run data collection for Cavity Field Emission project')
     parser.add_argument('-t', '--testing', help="Run in test mode with 'adamc:' EPICS prefix.", action='store_true')
     parser.add_argument('-l', '--linac', required=True,
