@@ -11,8 +11,6 @@ logger = logging.getLogger(__name__)
 
 
 def main() -> int:
-    logger.info("Starting main")
-
     parser = argparse.ArgumentParser(description='Run data collection for Cavity Field Emission project')
     parser.add_argument('-t', '--testing', help="Run in test mode with 'adamc:' EPICS prefix.", action='store_true')
     parser.add_argument('-l', '--linac', required=True,
@@ -39,7 +37,6 @@ def main() -> int:
                           help="How large of a gradient step to take each time. Max value of 1.0.")
     gradient.add_argument('-n', '--num-steps', required=True, type=int,
                           help="How many times should all zones be stepped down.")
-
 
     try:
         args = parser.parse_args()
