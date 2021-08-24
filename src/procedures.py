@@ -196,7 +196,8 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
         cavity.walk_gradient(cavity.gset_no_fe)
 
 
-def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_size: float) -> bool:
+def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_size: float,
+                            n_rad_samples: float = 10, rad_t_threshold: float = 10) -> bool:
     """This walks an individual cavity's gradient up until radiation is seen on an NDX detector.
 
     This assumes that the machine is setup in such a way that current radiation levels at 'start' will be similar to
@@ -208,6 +209,8 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
         linac: The rest of a linac that is under test
         start: A gset value that is known to produce no radiation.  The first new measurement is made one step above.
         step_size: The amount by which gradient should be increased at each step
+        n_rad_samples: The number of radiation samples to take when checking for radiation
+        rad_t_threshold: Min t-stat for asserting radiation
 
     Returns:
         True/False - was FE onset found?
@@ -221,7 +224,7 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
 
     # Prime the following while loop
     found_onset = False
-    cavity.set_gradient(start)
+    cavity.walk_gradient(start)
     val = start
 
     # Walk the cavity gradient up in small steps until we see a change in radiation
@@ -236,17 +239,18 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
         cavity.set_gradient(next_val)
 
         # Measure radiation.  Turn cavity back down if we see anything above background.
-        logger.info("Taking three radiation measurements")
-        linac.get_radiation_measurements(3)
-        is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=10)
+        logger.info(f"Taking {n_rad_samples} radiation measurements")
+        linac.get_radiation_measurements(n_rad_samples)
+        is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=rad_t_threshold)
         if is_rad:
             logger.info(f"Found FE onset for {cavity.name} at {val} MV/m (t-stat = {t_stat} at {max_d.name}).")
             logger.info(f"Turning cavity down to verify radiation elimination.")
             cavity.set_gradient(val)
             linac.get_radiation_measurements(3)
-            is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=10)
+            is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=rad_t_threshold)
             if is_rad:
-                logger.info(f"Found radiation when cavity turned down (t-stat = {t_stat} at {max_d.name}).  Search Failed.")
+                logger.info(
+                    f"Found radiation when cavity turned down (t-stat = {t_stat} at {max_d.name}).  Search Failed.")
             else:
                 found_onset = True
                 cavity.gset_fe_onset = val
@@ -288,7 +292,7 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
         raise ValueError("settle_time is restricted to at least 6 seconds to protect cryogenic systems.")
 
     for i in range(num_steps):
-        logger.info(f"Running iteration {i+1} of {num_steps}")
+        logger.info(f"Running iteration {i + 1} of {num_steps}")
         with open("./data/data_log.txt", mode="a") as f:
             zone_names = ','.join([z for z in sorted(linac.zones.keys())])
             f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
