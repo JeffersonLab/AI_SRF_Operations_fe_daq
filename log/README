@@ -1,0 +1,3 @@
+Each application run will write all output to a single timestamped directory
+here.  After a run, the relevant data should be copied to ../../../data/
+(<project_root>/data) under a directory that makes sense.
