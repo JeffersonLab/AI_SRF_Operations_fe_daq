@@ -4,7 +4,6 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple
 import requests
-import numpy as np
 import epics
 
 from cavity import Cavity
@@ -345,5 +344,7 @@ class LinacFactory:
 
         # Here we check that all cavity PVs are able to connect and run any initialization that happens after
         # PVs are connected.
+        logger.info("Waiting for cavities to establish EPICS CA connections.")
         for cavity in linac.cavities.values():
             cavity.wait_for_connections()
+        logger.info("Done waiting for EPICS CA connections.")
