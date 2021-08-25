@@ -1,19 +1,65 @@
 import logging
+import os
+import sys
 import traceback
 import argparse
+import signal
+from datetime import datetime
+
 from linac import LinacFactory
 
 import procedures
 
-# logging.DEBUG for gory details on linac operations.  LOTS of data.
-logging.basicConfig(level=logging.INFO, format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
-logger = logging.getLogger(__name__)
+# The root directory of the app
+app_root = os.path.realpath(os.path.join(os.path.basename(__file__), ".."))
+
+
+def sigint_handler(sig, frame):
+    logging.info("Received SIGINT signal (Control-c).  Exiting.")
+    sys.exit(1)
+
+
+def init_logging(log_dir: str, run_log: str, testing: bool) -> None:
+    """Setup logging configuration and directory structure.
+
+    Args:
+        log_dir: The full path to the log directory
+        run_log: The name of the file to create with log_dir
+    """
+    # logging.DEBUG for gory details on linac operations.  LOTS of data.
+    log_formatter = logging.Formatter('%(asctime)s %(name)-12s %(levelname)-8s %(message)s')
+    root_logger = logging.getLogger('')
+    root_logger.setLevel(logging.INFO)
+
+    # Only make the file output for production run
+    if testing:
+        # Make the directory for logging this run
+        if not os.path.exists(log_dir):
+            os.mkdir(log_dir)
+
+        # Fail if we can't create that.  os.mkdir may throw - not clear to me.
+        if not os.path.exists(log_dir):
+            msg = f"Error creating log directory {log_dir}. Exiting"
+            logging.error(msg)
+            raise RuntimeError(msg)
+
+        # Add a file output to the logging module
+        file_handler = logging.FileHandler(filename=os.path.join(log_dir, run_log))
+        file_handler.setFormatter(log_formatter)
+        root_logger.addHandler(file_handler)
+
+    # Add a stream handler that prints to console
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setFormatter(log_formatter)
+    root_logger.addHandler(stdout_handler)
 
 
 def main() -> int:
+    signal.signal(signal.SIGINT, sigint_handler)
+
     parser = argparse.ArgumentParser(description='Run data collection for Cavity Field Emission project')
     parser.add_argument('-t', '--testing', help="Run in test mode with 'adamc:' EPICS prefix.", action='store_true')
-    parser.add_argument('-l', '--linac', required=True,
+    parser.add_argument('-l', '--linac', required=True, choices=['NorthLinac', 'SouthLinac'],
                         help="Which linac to use.  Must match CED SegMask, e.g., NorthLinac")
 
     subparsers = parser.add_subparsers(dest="command")
@@ -40,10 +86,15 @@ def main() -> int:
 
     try:
         args = parser.parse_args()
-        logger.info(f"CLI args = {ascii(args)}")
-
         linac_name = args.linac
         testing = args.testing
+
+        # Setup logging for the whole app
+        log_dir = os.path.join(app_root, "log", f"run-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}")
+        init_logging(log_dir=log_dir, run_log="fe_daq.log", testing=testing)
+        logger = logging.getLogger(__name__)
+
+        logger.info(f"CLI args = {ascii(args)}")
 
         if testing:
             logger.info("Running in test mode")
