@@ -1,0 +1,4 @@
+# TODO
+
+- Update set gradient to check that the autoheaters are working before making a change
+  - PV: CAPBON == 1
