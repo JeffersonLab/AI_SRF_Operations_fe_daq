@@ -116,6 +116,12 @@ def find_no_fe_gsets(zone: Zone, linac: Linac, data_file: str, step_size: float 
                         # Implies next_val == cavity.odvh.value, but that float comparison could be misleading.
                         logger.info(f"Found no FE at {cavity.name} at ODVH of {val} MV/m")
                         cavity.gset_no_fe = next_val
+
+                        # It's possible that the cavity is really just over the onset point and making small amounts
+                        # FE electrons.  Step it down more to be safe.
+                        safe_val = max(cavity.gset_min - 2, 5)
+                        cavity.walk_gradient(safe_val)
+
     finally:
         # Note that some of these may not be what we
         logger.info(f"Saving the coarse 'no FE' levels to {data_file}")
@@ -152,47 +158,53 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
         found_onset = False
         count = 1
 
-        # Where to start the initial search.  Note walk_cavity_gradient_up should handle the case where start >= odvh.
+        # Where to start the initial search.
         start = cavity.gset_no_fe
+        if start >= cavity.odvh.value:
+            # If we ran the coarse search to the max without seeing radiation
+            logger.info(f"{cavity.name} already checked up to ODVH by coarse scan.  Skipping fine-grained search.")
+            cavity.gset_fe_onset = 100
+        else:
+            if abs(start - cavity.gset.value) > 0.01:
+                logger.warning(
+                    f"Starting fine-grained FE onset check of {cavity.name}.  Start GSET ({cavity.gset.value}"
+                    f" != 'No FE' GSET ({start}).")
+                cavity.walk_gradient(start)
 
-        if abs(start - cavity.gset.value) > 0.01:
-            logger.warning(f"Starting fine-grained FE onset check of {cavity.name}.  Start GSET ({cavity.gset.value}"
-                           f" != 'No FE' GSET ({start}).")
+            # Now try at most three times to detect the FE onset for this cavity
+            while not found_onset and count <= n_tries:
+                logger.info(f"Starting FE onset search for {cavity.name}.  Attempt {count} of {n_tries}")
+                try:
+                    found_onset = walk_cavity_gradient_up(cavity=cavity, linac=linac, start=start, step_size=step_size)
+                except Exception as exc:
+                    logger.error(f"Exception while walking {cavity.name} up.\n{exc}")
+                    response = input(f"Something went wrong when walking {cavity.name}.  Try again? ").lstrip().lower()
+                    if not response.startswith('y'):
+                        break
+                finally:
+                    count += 1
 
-        # Now try at most three times to detect the FE onset for this cavity
-        while not found_onset and count <= n_tries:
-            logger.info(f"Starting FE onset search for {cavity.name}.  Attempt {count} of {n_tries}")
-            try:
-                found_onset = walk_cavity_gradient_up(cavity=cavity, linac=linac, start=start, step_size=step_size)
-            except Exception as exc:
-                logger.error(f"Exception while walking {cavity.name} up.\n{exc}")
-                response = input(f"Something went wrong when walking {cavity.name}.  Try again? ").lstrip().lower()
-                if not response.startswith('y'):
-                    break
-            finally:
-                count += 1
+                # We we able to find anything after several repeated attempts.  If not, then background radiation has
+                # probably changed.  Ask user if we should update it.  If so, reset the count and do this cavity again.
+                if not found_onset and count > n_tries:
+                    logger.warning(f"{cavity.name} could not find FE onset gradient.")
+                    response = input("Should we re-baseline background radiation? (n|y): ").lstrip().lower()
+                    if response.startswith("y"):
+                        logger.warning("Updating background radiation readings with current levels")
+                        linac.get_radiation_measurements(10)
+                        linac.save_radiation_measurements_as_background()
 
-            # We we able to find anything after several repeated attempts.  If not, then background radiation has
-            # probably changed.  Ask user if we should update it.  If so, reset the count and do this cavity again.
-            if not found_onset and count > n_tries:
-                logger.warning(f"{cavity.name} could not find FE onset gradient.")
-                response = input("Should we re-baseline background radiation? (n|y): ").lstrip().lower()
-                if response.startswith("y"):
-                    logger.warning("Updating background radiation readings with current levels")
-                    linac.get_radiation_measurements(10)
-                    linac.save_radiation_measurements_as_background()
+                    response = input(f"Should we retry {cavity.name} (n|y): ").lstrip().lower()
+                    if response.startswith("y"):
+                        logger.info(f"Restarting fine-grained FE onset check of {cavity.name}.")
+                        count = 1
 
-                response = input(f"Should we retry {cavity.name} (n|y): ").lstrip().lower()
-                if response.startswith("y"):
-                    logger.info(f"Restarting fine-grained FE onset check of {cavity.name}.")
-                    count = 1
+            logger.info(f"Walking {cavity.name} down to 'no FE' (from {cavity.gset.value} to {cavity.gset_no_fe}")
+            cavity.walk_gradient(cavity.gset_no_fe)
 
         with open(data_file, mode="a") as f:
             logger.info(f"Saving FE Onset value to {data_file} for {cavity.name}.")
             f.write(f"{cavity.gset.pvname}\t{cavity.gset_fe_onset}\n")
-
-        logger.info(f"Walking {cavity.name} down to 'no FE' (from {cavity.gset.value} to {cavity.gset_no_fe}")
-        cavity.walk_gradient(cavity.gset_no_fe)
 
 
 def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_size: float,
@@ -262,7 +274,8 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
     return found_onset
 
 
-def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: int, data_file:str, step_size: float = 1,
+def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: int, data_file: str,
+                                     step_size: float = 1,
                                      settle_time: float = 6):
     """Turn down one cavity at a time in a random order.  Don't jot a cavity twice until all have been done once.
 
