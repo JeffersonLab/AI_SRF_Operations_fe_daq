@@ -1,2 +1,5 @@
 /.idea/
 /test/ioc/scripts/pid.txt
+__pycahe__/
+*.py[cod]
+src/*.egg-info
