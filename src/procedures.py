@@ -155,7 +155,7 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
         # Where to start the initial search.  Note walk_cavity_gradient_up should handle the case where start >= odvh.
         start = cavity.gset_no_fe
 
-        if abs(start - cavity.gset.value) < 0.01:
+        if abs(start - cavity.gset.value) > 0.01:
             logger.warning(f"Starting fine-grained FE onset check of {cavity.name}.  Start GSET ({cavity.gset.value}"
                            f" != 'No FE' GSET ({start}).")
 
