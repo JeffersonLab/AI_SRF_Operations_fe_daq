@@ -19,7 +19,7 @@ def sigint_handler(sig, frame):
     sys.exit(1)
 
 
-def init_logging(log_dir: str, run_log: str, testing: bool) -> None:
+def init_logging(log_dir: str, run_log: str) -> None:
     """Setup logging configuration and directory structure.
 
     Args:
@@ -31,22 +31,20 @@ def init_logging(log_dir: str, run_log: str, testing: bool) -> None:
     root_logger = logging.getLogger('')
     root_logger.setLevel(logging.INFO)
 
-    # Only make the file output for production run
-    if testing:
-        # Make the directory for logging this run
-        if not os.path.exists(log_dir):
-            os.mkdir(log_dir)
+    # Make the directory for logging this run
+    if not os.path.exists(log_dir):
+        os.mkdir(log_dir)
 
-        # Fail if we can't create that.  os.mkdir may throw - not clear to me.
-        if not os.path.exists(log_dir):
-            msg = f"Error creating log directory {log_dir}. Exiting"
-            logging.error(msg)
-            raise RuntimeError(msg)
+    # Fail if we can't create that.  os.mkdir may throw - not clear to me.
+    if not os.path.exists(log_dir):
+        msg = f"Error creating log directory {log_dir}. Exiting"
+        logging.error(msg)
+        raise RuntimeError(msg)
 
-        # Add a file output to the logging module
-        file_handler = logging.FileHandler(filename=os.path.join(log_dir, run_log))
-        file_handler.setFormatter(log_formatter)
-        root_logger.addHandler(file_handler)
+    # Add a file output to the logging module
+    file_handler = logging.FileHandler(filename=os.path.join(log_dir, run_log))
+    file_handler.setFormatter(log_formatter)
+    root_logger.addHandler(file_handler)
 
     # Add a stream handler that prints to console
     stdout_handler = logging.StreamHandler(sys.stdout)
@@ -73,7 +71,7 @@ def main() -> int:
                        help='Selection of NDX electrometers available in zone\'s linac to include in test.  Also '
                             'excludes associated detectors.  All if empty.')
 
-    gradient.add_argument('--linac_zones', nargs="+", required=True,
+    gradient.add_argument('--linac-zones', nargs="+", required=True,
                           help="Selection of zones from linac that will be included in test. All if empty")
     # parser.add_argument('-s', '--settle-time', default=5,
     #                     help="How long in seconds to let CEBAF sit after making changes to RF")
@@ -90,14 +88,15 @@ def main() -> int:
         testing = args.testing
 
         # Setup logging for the whole app
-        log_dir = os.path.join(app_root, "log", f"run-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}")
-        init_logging(log_dir=log_dir, run_log="fe_daq.log", testing=testing)
+        dir_name = f"run-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}"
+        if testing:
+            dir_name = f"run-testing-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}"
+        log_dir = os.path.join(app_root, "log", dir_name)
+        init_logging(log_dir=log_dir, run_log="fe_daq.log")
         logger = logging.getLogger(__name__)
 
         logger.info(f"CLI args = {ascii(args)}")
-
-        if testing:
-            logger.info("Running in test mode")
+        logger.info(f"Running in test mode: {testing}")
 
         if args.command == 'fe_onset':
 
@@ -124,7 +123,8 @@ def main() -> int:
             zone = linac.zones[zone_name]
 
             # Go find those FE Onsets
-            procedures.run_find_fe_process(zone, linac)
+            procedures.run_find_fe_process(zone, linac, no_fe_file=os.path.join(log_dir, f"no_fe-{zone_name}.tsv"),
+                                           fe_onset_file=os.path.join(log_dir, f"fe_onset-{zone_name}.tsv"))
 
         elif args.command == 'gradient_scan':
 
@@ -140,7 +140,8 @@ def main() -> int:
             linac = LinacFactory(testing=testing).create_linac(name=linac_name, zone_names=zone_names)
 
             procedures.run_gradient_scan_levelized_walk(linac=linac, avg_time=average_time, num_steps=num_steps,
-                                                        step_size=step_size)
+                                                        step_size=step_size,
+                                                        data_file=os.path.join(log_dir, "gradient-scan.csv"))
 
             # Put the PSETs back where you found them.
             linac.restore_psets()
@@ -152,6 +153,7 @@ def main() -> int:
         logging.exception("Fatal exception raised.  Exiting.")
         return 1
 
+    logging.info("Program exiting normally.")
     return 0
 
 

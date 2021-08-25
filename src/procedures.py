@@ -12,8 +12,7 @@ from state_monitor import StateMonitor
 logger = logging.getLogger(__name__)
 
 
-def run_find_fe_process(zone: Zone, linac: Linac, no_fe_file="./data/no_fe.tsv",
-                        fe_onset_file="./data/fe_onset.tsv") -> None:
+def run_find_fe_process(zone: Zone, linac: Linac, no_fe_file: str, fe_onset_file: str) -> None:
     """High level function of measuring field emission onset within a single zone.
 
     This includes linac setup, course 'no FE' search, and fine 'FE onset' search."""
@@ -263,7 +262,7 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
     return found_onset
 
 
-def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: int, step_size: float = 1,
+def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: int, data_file:str, step_size: float = 1,
                                      settle_time: float = 6):
     """Turn down one cavity at a time in a random order.  Don't jot a cavity twice until all have been done once.
 
@@ -275,6 +274,7 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
         avg_time:  How long to pause for mya to record data after the systems settle.  Typically used to create a less
                    noisy average of the signal.
         num_steps: How many times should we walk down the zones.
+        data_file: The path to location where the data sample metadata should be saved.
         step_size:  The downward step size in MV/m used to reduce the gradient of a cavity.  Only positive numbers
                     supported (positive number will lower GSET).
         settle_time:  The amount of time to allow systems to settle after making a change to gradient.  Here this
@@ -293,7 +293,7 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
 
     for i in range(num_steps):
         logger.info(f"Running iteration {i + 1} of {num_steps}")
-        with open("./data/data_log.txt", mode="a") as f:
+        with open(data_file, mode="a") as f:
             zone_names = ','.join([z for z in sorted(linac.zones.keys())])
             f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
             f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
