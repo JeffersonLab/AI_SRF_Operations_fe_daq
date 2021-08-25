@@ -149,9 +149,7 @@ def main() -> int:
             raise ValueError("Command required. fe_onset, gradient_scan")
 
     except Exception as ex:
-        print("Fatal exception raised.  Exiting")
-        print(ex)
-        print(traceback.print_exc())
+        logging.exception("Fatal exception raised.  Exiting.")
         return 1
 
     return 0
