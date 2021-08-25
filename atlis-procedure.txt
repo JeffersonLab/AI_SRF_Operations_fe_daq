@@ -1,0 +1,68 @@
+### FE Onset Procedure ###
+
+# Have ops get restore points for RF, NDX
+
+# Have ops turn off 1L16 to 1L25, excluding 1L22
+
+# Commands for running FE onset scans.  REMOVE THE TESTING FLAG (-t)
+# Might also need to specify the detectors to use (-d <ndx_detector>)
+bin/fe_daq.bash -t -l NorthLinac -z 1L22 -m fe_onset
+cat data/no_fe.tsv data/fe_onset.tsv
+
+# Turn off 1L22, turn on 1L23
+bin/fe_daq.bash -t -l NorthLinac -z 1L23 -m fe_onset
+cat data/no_fe.tsv data/fe_onset.tsv
+
+# Turn off 1L23, turn on 1L24
+bin/fe_daq.bash -t -l NorthLinac -z 1L24 -m fe_onset
+cat data/no_fe.tsv data/fe_onset.tsv
+
+# Turn off 1L24, turn on 1L25
+bin/fe_daq.bash -t -l NorthLinac -z 1L25 -m fe_onset
+cat data/no_fe.tsv data/fe_onset.tsv
+
+
+
+### Gradient Scanning ###
+
+# Have ops turn all of NL on and back to LEM values
+
+# This will do one round of 1 MV/m step downs across all cavities in 1L22-1L24
+# in a random order.  REMOVE THE TESTING FLAG (-t)
+bin/fe_daq.bash -t -l NorthLinac --linac_zones 1L22 1L23 1L24 1L25 -m g_scan -a 3
+
+# Repeat the above as much as desired
+
+
+
+
+
+
+#### 2021-08-23 Data Collection
+
+## NL Gradient Scans
+[36] 13:33:54 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 0.2 -n 10
+[38] 14:48:17 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 0.1 -n 1
+[38] 14:48:17 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 1 -n 3
+[41] 15:54:06 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 0.2 -n 1
+[41] 15:54:06 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 1 -n 3
+[41] 15:54:06 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 0.3 -n 1
+[42] 16:07:48 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 1 -n 3
+[43] 16:50:14 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 0.4 -n 1
+[44] 16:56:44 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 1 -n 3
+[45] 17:24:56 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 0.5 -n 1
+[46] 17:36:16 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 1 -n 3
+[47] 18:06:32 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 0.6 -n 1
+[48] 18:24:18 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 1 -n 3
+[50] 19:12:40 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 0.7 -n 1
+
+## SL FE Onset Scans
+Kept Failing..
+
+# Found that onset were not that accurate.  See data files for notes.
+bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
+
+#Updated so that fine-grained search uses  10 second samples of rad data to compare
+[87] DING! adamc@opsl06 > bin/fe_daq.bash -l SouthLinac fe_onset -z 2L23
+
+[93] 18:15:02 adamc@opsl06 > bin/fe_daq.bash -l SouthLinac fe_onset -z 2L24
