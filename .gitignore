@@ -3,3 +3,4 @@
 __pycahe__/
 *.py[cod]
 src/*.egg-info
+/log/run-*
