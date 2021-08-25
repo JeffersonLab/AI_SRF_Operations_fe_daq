@@ -1,0 +1,24 @@
+# Notes from a conversation with J. Benesch
+
+# GSET guidance
+1 MV/m across all of a C100 over 30 seconds
+ - Max of 2 MV/m across 4 cavities in a zone, or 1 MV/m across all 8 if I wait 30 s
+ - Max of 5 MV/m for a single cavity if I wait 30 s
+ - Wait 6 seconds if I make a 1 MV/m to a single change
+ - Check that auto heaters are working (PV CAPBON == 1)
+ - Stepping up or down is fine within these parameters
+
+Turning off a whole module requires 5 minutes before another gradient change can be made
+LEM from all min gradients to ~900 MeV required 90 minutes
+Tuners may take 30s – figure out to handle that random interruption
+Keep gradients in the range 3 or 5 MV/m and ODVH
+I can have OPS relem to something lower (-50 MeV or -25 MeV)
+There is no maximum limit for total gradient changes so long as allow cryo and tuners to keep up using the above pacing rules
+
+Heaters check and update on a 12 second cycle (CAPSWGST.VAL in minutes)
+Check MYA deadband on NDX current and dose rate
+Check MYA for a tuner to stop moving (PV DETA)
+
+# PSET guidance
+Changing PSETs on the whole linac by +/- 10 deg randomly around their phaser set values should be fine (if no beam is present)
+I don’t need to add any wait time for this
