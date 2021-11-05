@@ -1,9 +1,8 @@
 import logging
+import math
 import random
-import time
 from datetime import datetime, timedelta
 from operator import attrgetter
-from typing import List
 
 from cavity import Cavity
 from linac import Zone, Linac
@@ -98,6 +97,7 @@ def find_no_fe_gsets(zone: Zone, linac: Linac, data_file: str, step_size: float 
                     # Measure radiation.  Turn cavity back down if we see anything above background.
                     logger.info("Measuring radiation")
                     linac.get_radiation_measurements(3)
+                    # TODO: Update t-threshold.  Was 10
                     is_rad, t_stat, max_d = linac.is_radiation_above_background(t_stat_threshold=10)
                     if is_rad:
                         # We've had some trouble where FE shows up later, despite turning this back down one step.
@@ -119,6 +119,7 @@ def find_no_fe_gsets(zone: Zone, linac: Linac, data_file: str, step_size: float 
 
                         # It's possible that the cavity is really just over the onset point and making small amounts
                         # FE electrons.  Step it down more to be safe.
+                        # TODO: Fix this.  Should be cavity.gset_no_fe???
                         safe_val = max(cavity.gset_min - 2, 5)
                         cavity.walk_gradient(safe_val)
 
@@ -175,7 +176,9 @@ def find_fe_onset(zone: Zone, linac: Linac, data_file: str, step_size: float = 0
             while not found_onset and count <= n_tries:
                 logger.info(f"Starting FE onset search for {cavity.name}.  Attempt {count} of {n_tries}")
                 try:
-                    found_onset = walk_cavity_gradient_up(cavity=cavity, linac=linac, start=start, step_size=step_size)
+                    # TODO: Add check here for if we walked up to up ODVH.  Otherwise we cycle three times.
+                    found_onset = walk_cavity_gradient_up(cavity=cavity, linac=linac, start=start, step_size=step_size,
+                                                          rad_t_threshold=10)
                 except Exception as exc:
                     logger.error(f"Exception while walking {cavity.name} up.\n{exc}")
                     response = input(f"Something went wrong when walking {cavity.name}.  Try again? ").lstrip().lower()
@@ -274,10 +277,203 @@ def walk_cavity_gradient_up(cavity: Cavity, linac: Linac, start: float, step_siz
     return found_onset
 
 
+def setup_zone_baseline_gradient(zone, linac, baseline_gradient, background_n_samples):
+    # Establish the low baseline
+    logger.info(f"Walking cavities to baseline ({baseline_gradient} MV/m)")
+    for cav in zone.cavities:
+        if baseline_gradient < cavity.gset_min:
+            raise ValueError(
+                f"{cav.name} - Can't set baseline ({baseline_gradient}) below minimum stable gradient "
+                f"({cav.gset_min})")
+        if abs(cav.gset.value - baseline_gradient) > 0.01:
+            logger.info(f"Walking {cavity.name} from {cav.gest.value} -> {baseline_gradient}")
+            cav.walk_gradient(baseline_gradient)
+
+    logger.info(f"Measuring {background_n_samples} radiation samples to use as background")
+    linac.get_radiation_measurements(10)
+    linac.save_radiation_measurements_as_background()
+
+
+def walk_cavity_up_from_baseline(cavity, linac, coarse_step_size, quick_n_samples, slow_n_samples, quick_t_threshold,
+                                 slow_t_threshold):
+    found_rad = False
+
+    # Walk a cavity up until we see radiation, or until we hit it's ODVH.
+    while cavity.gset.value < cavity.odvh.value:
+        next_gset = cavity.gset.value + coarse_step_size
+        if next_gset > cavity.odvh.value:
+            logger.info(f"Taking {cavity.name} to ODVH of {cavity.odvh.value} MV/m")
+            next_gset = cavity.odvh.value
+
+        logger.info(f"Walking {cavity.name} from {cavity.gset.value} -> {next_gset}")
+        cavity.walk_gradient(next_gset)
+
+        # Take a quick sample
+        logger.info(f"Taking {quick_n_samples} radiation samples.")
+        linac.get_radiation_measurements(quick_n_samples)
+        is_rad, t_stat, max_d = linac.is_radiation_above_background(quick_t_threshold)
+        if is_rad:
+            logger.info(f"Found radiation at {max_d.name} ({t_stat} > {quick_t_threshold} threshold)")
+            logger.info(f"Taking {slow_n_samples} samples to verify.")
+            linac.get_radiation_measurements(slow_n_samples)
+            is_rad, t_stat, max_d = linac.is_radiation_above_background(slow_t_threshold)
+            if is_rad:
+                found_rad = True
+                # Save the no_fe value as the previous step
+                cavity.gset_no_fe = cavity.gset.value - coarse_step_size
+                logger.info(f"Found radiation at {max_d.name} ({t_stat} > {quick_t_threshold} threshold)")
+                break
+
+    # We walked this up to it's max and didn't see any radiation with quick checks.  Make sure with a long one.
+    if not found_rad:
+        logger.info(f"Walked {cavity.name} to ODVH without seeing radiation.")
+        logger.info(f"Taking {slow_n_samples} samples to verify.")
+        linac.get_radiation_measurements(slow_n_samples)
+        is_rad, t_stat, max_d = linac.is_radiation_above_background(slow_t_threshold)
+        if is_rad:
+            found_rad = True
+            cavity.gset_no_fe = cavity.gset.value - coarse_step_size
+            logger.info(f"Found radiation at {max_d.name} ({t_stat} > {quick_t_threshold} threshold)")
+        else:
+            logger.info(
+                f"Largest non-significant radiation at {max_d.name} ({t_stat} < {quick_t_threshold} threshold)")
+
+    return found_rad
+
+
+def walk_cavity_down_from_radiation(cavity, linac, fine_step_size, quick_n_samples, slow_n_samples, quick_t_threshold,
+                                    slow_t_threshold):
+    rad_gone = False
+    while cavity.gset.value > cavity.gset_min:
+
+        next_gset = cavity.gset.value - fine_step_size
+        if next_gset < cavity.gset_min:
+            logger.info(f"Setting {cavity.name} to it's min stable gradient ({cavity.gset_min} MV/m)")
+            next_gset = cavity.gset_min
+
+        # Walk the cavity
+        logger.info(f"Walking {cavity.name} from {cavity.gset.value} -> {next_gset}.")
+        cavity.walk_gradient(next_gset)
+
+        # Take a quick sample
+        logger.info(f"Taking {quick_n_samples} radiation samples.")
+        linac.get_radiation_measurements(quick_n_samples)
+        is_rad, t_stat, max_d = linac.is_radiation_above_background(quick_t_threshold)
+        if not is_rad:
+            logger.info(f"Found no significant radiation.  Worst at {max_d.name} ({t_stat} > "
+                        f"{quick_t_threshold} threshold)")
+            logger.info(f"Taking {slow_n_samples} samples to verify.")
+            linac.get_radiation_measurements(slow_n_samples)
+            is_rad, t_stat, max_d = linac.is_radiation_above_background(slow_t_threshold)
+            if not is_rad:
+                rad_gone = True
+                # Save the no_fe value as the previous step
+                cavity.gset_fe_onset = cavity.gset.value
+                logger.info(f"Found no significant radiation.  Worst at {max_d.name} ({t_stat} > "
+                            f"{quick_t_threshold} threshold)")
+                break
+
+    return rad_gone
+
+
+def find_fe_onset_low_baseline(zone: Zone, linac: Linac, no_fe_file: str, fe_onset_file: str, coarse_step_size: float,
+                               fine_step_size: float, baseline_gradient: float = 5.0):
+    """Set all cavities in a zone to a static baseline gradient.  Walk each cavity up in big steps, down in small.
+
+    Walk a cavity up in big steps doing quick checks for radiation.  If we see some, do a longer scan.  Then step down
+    in small steps, with the same scanning pattern.  Report when no radiation is seen on the way down.
+    """
+
+    quick_t_threshold = 10
+    slow_t_threshold = 20
+    quick_n_samples = 4
+    slow_n_samples = 20
+    background_n_samples = 10
+    logger.info("Running find_fe_onset_low_baseline procedure.")
+
+    with open(no_fe_file, mode="a") as f:
+        f.write(f"Using find_fe_onset_low_baseline (big steps up, small steps down) approach.")
+        f.write(f"# {zone.name} step_size={coarse_step_size}, t-thresh={slow_t_threshold}, "
+                f"{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+    with open(fe_onset_file, mode="a") as f:
+        f.write(f"Using find_fe_onset_low_baseline (big steps up, small steps down) approach.")
+        f.write(f"# {zone.name} step_size={fine_step_size} {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+    # Walk each cavity up in big steps, to find a radiation signal.  Then back down in small steps until it goes away
+    for cavity in zone.cavities:
+        # We may want to redo the search.  Leave it up to operator discretion.
+        redo_search = True
+        while redo_search:
+            try:
+                redo_search = False
+
+                # Establish baseline gradients and radiation
+                setup_zone_baseline_gradient(zone=zone, linac=linac, baseline_gradient=baseline_gradient,
+                                             background_n_samples=background_n_samples)
+
+                # Walk cavity up until we see radiation or until we max out ODVH
+                found_rad = walk_cavity_up_from_baseline(cavity=cavity, linac=linac, coarse_step_size=coarse_step_size,
+                                                         quick_n_samples=quick_n_samples, slow_n_samples=slow_n_samples,
+                                                         quick_t_threshold=quick_t_threshold,
+                                                         slow_t_threshold=slow_t_threshold)
+
+                # We still haven't found radiation, even after looking really hard
+                if not found_rad:
+                    logger.info(f"No radiation seen for {cavity.name}")
+                    cavity.gset_no_fe = 100
+                    cavity.gset_fe_onset = 100
+                else:
+                    # We found radiation, so now take small steps until it's gone.
+                    logger.info(f"Found radiation.  Walking down in small steps until it disappears.")
+                    rad_gone = walk_cavity_down_from_radiation(cavity=cavity, linac=linac, quick_n_samples=quick_n_samples,
+                                                               slow_n_samples=slow_n_samples,
+                                                               quick_t_threshold=quick_t_threshold,
+                                                               slow_t_threshold=slow_t_threshold)
+
+                    # If we walked the cavity all the way back down and still have radiation, then we have a problem
+                    if not rad_gone:
+                        logger.info(f"Walked {cavity.name} to min gradient ({cavity.gset_min} MV/m) without radiation"
+                                    f" disappearing")
+                        response = input("Re-baseline and try search again? [n/y]: ").strip().lower()
+                        if response.startswith("y"):
+                            logger.info("User instructed to re-baseline and retry search")
+                            cavity.gset_fe_onset = None
+                            cavity.gset_no_fe = None
+                            redo_search = True
+                            continue
+
+            except Exception as exc:
+                logger.error(f"Problem during cavity search {exc}")
+                response = input("Re-baseline and try search again? [n/y]: ").strip().lower()
+                if response.startswith("y"):
+                    logger.info("User instructed to re-baseline and retry search")
+                    cavity.gset_fe_onset = None
+                    cavity.gset_no_fe = None
+                    redo_search = True
+                    continue
+
+                if cavity.gset_no_fe > cavity.gset_fe_onset:
+                    logger.warning("Coarse search found a higher gradient without FE than the fine search.")
+
+            with open(no_fe_file, mode="a") as f:
+                logger.info(f"Saving No FE value to {no_fe_file} for {cavity.name}.")
+                f.write(f"{cavity.gset.pvname}\t{cavity.gset_no_fe}\n")
+
+            with open(fe_onset_file, mode="a") as f:
+                logger.info(f"Saving FE Onset value to {fe_onset_file} for {cavity.name}.")
+                f.write(f"{cavity.gset.pvname}\t{cavity.gset_fe_onset}\n")
+
+
 def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: int, data_file: str,
-                                     step_size: float = 1,
-                                     settle_time: float = 6):
-    """Turn down one cavity at a time in a random order.  Don't jot a cavity twice until all have been done once.
+                                     step_size: float = 1, settle_time: float = 6, n_cavities: int = None,
+                                     max_cavity_steps=None):
+    """Turn down group of cavities, one cavity at a time, in a random order.
+
+    Don't allow same cavity twice until all in group were done once.  If n_cavities and max_cavity_steps are None, then
+    all cavities are stepped down each iteration across num_steps.  n_cavities and max_cavity_steps allows for
+    variations on a more random walk (n_cavities=1 means one cavity at random, repeats allowed, will be turned down ever
+    n_steps).
 
     This procedure supports a settle time of 6 as we need Cavity.set_gradient call to wait six seconds for
     cryo which is a little longer than what we'd want otherwise.
@@ -293,6 +489,10 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
         settle_time:  The amount of time to allow systems to settle after making a change to gradient.  Here this
                       time is handled by the Cavity being changed and includes the time for cryo to adjust.  For
                       step_size of 1 MV/m, settle time should be 6.
+        n_cavities:  The number of cavities randomly selected in the group to be turned down.  None (default) implies
+                     all.
+        max_cavity_steps:  The maximum number of steps a single cavity is allowed to take.  None (default) implies
+                           unlimited.
     """
 
     if num_steps < 1:
@@ -304,19 +504,45 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
     if settle_time < 6:
         raise ValueError("settle_time is restricted to at least 6 seconds to protect cryogenic systems.")
 
+    # Track how many steps we're taking on each cavity
+    if max_cavity_steps is None:
+        max_cavity_steps = math.inf
+    cavity_steps = {}
+    allowable_cavities = {}
+    for cavity in linac.cavities.values():
+        cavity_steps[cavity.name] = 0
+        allowable_cavities[cavity.name] = cavity
+
+    zone_names = ','.join([z for z in sorted(linac.zones.keys())])
+    logger.info("Setting NDX to operations settings")
+    linac.set_ndx_for_operations()
+    logger.info(f"Starting gradient scan of {zone_names}")
+
     for i in range(num_steps):
         logger.info(f"Running iteration {i + 1} of {num_steps}")
         with open(data_file, mode="a") as f:
-            zone_names = ','.join([z for z in sorted(linac.zones.keys())])
             f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
             f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
 
-            logger.info("Setting NDX to operations settings")
-            linac.set_ndx_for_operations()
-            logger.info(f"Starting gradient scan of {zone_names}")
-
-            cavities = list(linac.cavities.values()).copy()
+            # Get the randomly ordered set of cavities to update
+            if len(allowable_cavities) == 0:
+                logger.info("All cavities have reached the max steps.  Stopping scan.")
+                return
+            cavities = list(allowable_cavities.values())
             random.shuffle(cavities)
+            if n_cavities is not None:
+                n_cavities_ = min(len(cavities), n_cavities)
+                cavities = cavities[:n_cavities]
+                logger.info(f"Cavities {[cavity.name for cavity in cavities]} chosen for this round of changes.")
+
+            # Got through and update the number of steps each cavity has taken.  Exclude cavity from allowable cavities
+            # if it is out of steps.
+            for cavity in cavities:
+                cavity_steps[cavity.name] += 1
+                logger.info(f"{cavity.name} is taking step {cavity_steps[cavity.name]}.")
+                if cavity_steps[cavity.name] >= max_cavity_steps:
+                    del allowable_cavities[cavity.name]
+                    logger.info(f"{cavity.name} is taking it's last allowable step ({max_cavity_steps}).")
 
             for cavity in cavities:
                 try:
