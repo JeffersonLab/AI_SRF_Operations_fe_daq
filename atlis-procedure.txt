@@ -1,5 +1,9 @@
 ### FE Onset Procedure ###
 
+###################################
+#########  2021-08-15   ###########
+###################################
+
 # Have ops get restore points for RF, NDX
 
 # Have ops turn off 1L16 to 1L25, excluding 1L22
@@ -37,8 +41,9 @@ bin/fe_daq.bash -t -l NorthLinac --linac_zones 1L22 1L23 1L24 1L25 -m g_scan -a 
 
 
 
-
+################################
 #### 2021-08-23 Data Collection
+################################
 
 ## NL Gradient Scans
 [36] 13:33:54 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac gradient_scan --linac_zones 1L22 1L23 1L24 1L25 -s 0.2 -n 10
@@ -66,3 +71,19 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 [87] DING! adamc@opsl06 > bin/fe_daq.bash -l SouthLinac fe_onset -z 2L23
 
 [93] 18:15:02 adamc@opsl06 > bin/fe_daq.bash -l SouthLinac fe_onset -z 2L24
+
+
+###############################
+#####   Aug 26, 2021   ########
+###############################
+
+## SL FE Onset Scans ##
+# I set the t-thresholds at 40 since there was a lot of drift.  This caused some issues.
+[131] 12:21:06 adamc@opsl07 > bin/fe_daq.bash -l SouthLinac fe_onset -z 2L26
+
+# Step up some of the cavities to where I thought it made sense.  I think one was a little high.  Did a manual check
+# after this.
+[137] 13:09:47 adamc@opsl07 > bin/fe_daq.bash -l SouthLinac fe_onset -z 2L26
+
+
+[138] 14:07:49 adamc@opsl07 > bin/fe_daq.bash -l SouthLinac fe_onset -z 2L25 -d INX2L25 INX2L26 INX2L27
