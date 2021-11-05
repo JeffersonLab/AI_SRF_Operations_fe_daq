@@ -81,6 +81,11 @@ def main() -> int:
                           help="How large of a gradient step to take each time. Max value of 1.0.")
     gradient.add_argument('-n', '--num-steps', required=True, type=int,
                           help="How many times should all zones be stepped down.")
+    gradient.add_argument('--num-cavities', required=False, type=int,
+                          help="How many cavities should be in the group stepped down each iteration (all by default).")
+    gradient.add_argument('--max-cavity-steps', required=False, type=int,
+                          help="How many times a single cavity is allowed to be stepped down (unlimited by default).")
+
 
     try:
         args = parser.parse_args()
@@ -133,15 +138,19 @@ def main() -> int:
             average_time = float(args.average_time)
             step_size = float(args.step_size)
             num_steps = int(args.num_steps)
+            n_cavities = args.num_cavities
+            max_cavity_steps = args.max_cavity_steps
             # settle_time = args.settle_time
 
             # Setup the Linac and Zone objects for the task at hand
             logger.info("Creating linac")
             linac = LinacFactory(testing=testing).create_linac(name=linac_name, zone_names=zone_names)
 
+            logger.info("Starting gradient scan")
             procedures.run_gradient_scan_levelized_walk(linac=linac, avg_time=average_time, num_steps=num_steps,
                                                         step_size=step_size,
-                                                        data_file=os.path.join(log_dir, "gradient-scan.csv"))
+                                                        data_file=os.path.join(log_dir, "gradient-scan.csv"),
+                                                        n_cavities=n_cavities, max_cavity_steps=max_cavity_steps)
 
             # Put the PSETs back where you found them.
             linac.restore_psets()
