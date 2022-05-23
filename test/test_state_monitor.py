@@ -61,7 +61,7 @@ class TestStateMonitor(TestCase):
 
         # Create a cavity with supporting structure
         linac = Linac(name="NorthLinac")
-        z_1L22 = Zone(name='1L22', linac=linac)
+        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0')
         logger.warning("Creating R1M1 cavity")
         cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
                      zone=z_1L22)
@@ -87,7 +87,7 @@ class TestStateMonitor(TestCase):
 
         # Create a cavity with supporting structure
         linac = Linac(name="NorthLinac")
-        z_1L22 = Zone(name='1L22', linac=linac)
+        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0')
         logger.warning("Creating R1M1 cavity")
         cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
                      zone=z_1L22)
@@ -107,7 +107,7 @@ class TestStateMonitor(TestCase):
 
         # Create a cavity with supporting structure
         linac = Linac(name="NorthLinac")
-        z_1L22 = Zone(name='1L22', linac=linac)
+        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0')
         logger.warning("Creating R1M1 cavity")
         cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
                      zone=z_1L22)

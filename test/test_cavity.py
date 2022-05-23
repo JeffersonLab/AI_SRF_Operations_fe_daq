@@ -17,9 +17,10 @@ logger = logging.getLogger()
 
 def get_cavity():
     linac = Linac("TestLinac")
-    zone = Zone(name="1L22", linac=linac)
+    zone = Zone(name="1L22", linac=linac, controls_type='2.0')
     cav = Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False, zone=zone)
     return cav
+
 
 def get_gradient_step_size(cavity: Cavity):
     gset = cavity.gset.value

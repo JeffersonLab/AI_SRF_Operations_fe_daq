@@ -128,7 +128,7 @@ class TestLinac(TestCase):
 
     def test_add_cavity(self):
         linac = Linac("TestLinac")
-        zone = Zone(name='1L11', linac=linac)
+        zone = Zone(name='1L11', linac=linac, controls_type='1.0')
         linac.zones[zone.name] = zone
         cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone)
 
@@ -222,7 +222,7 @@ class TestZone(TestCase):
 
     def test_add_cavity(self):
         linac = Linac("TestLinac")
-        zone = Zone(name='1L11', linac=linac)
+        zone = Zone(name='1L11', linac=linac, controls_type='1.0')
         linac.zones[zone.name] = zone
         cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone)
 
