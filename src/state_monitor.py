@@ -39,9 +39,10 @@ def connection_cb(pvname: str = None, conn: bool = None, **kwargs) -> None:
 
 def hv_read_back_cb(pvname: str, value: float, **kwargs) -> None:
     """Watch that HV readbacks don't differ from nominal by more than 10%"""
-    if value < 900 or value > 1100:
+    # Nominally supposed to be ~1000V, but in practice the range is pretty broad
+    if value < 850 or value > 1150:
         StateMonitor.hv_has_problem(pvname=pvname)
-        logger.error(f"{pvname} is wrong {value} (!= 1000 +/- 10%).")
+        logger.error(f"{pvname} is wrong {value} (!= 1000 +/- 15%).")
     else:
         StateMonitor.hv_good(pvname=pvname)
         #logger.info(f"{pvname} is ok {value} (== 1000 +/- 10%).")
