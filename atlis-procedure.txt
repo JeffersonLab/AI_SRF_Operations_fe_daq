@@ -87,3 +87,12 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 
 
 [138] 14:07:49 adamc@opsl07 > bin/fe_daq.bash -l SouthLinac fe_onset -z 2L25 -d INX2L25 INX2L26 INX2L27
+
+
+
+###########################
+######  Nov 5, 2021  ######
+###########################
+
+## NL Gradient Scans
+[89] 11:31:22 adamc@opsl07 > ./bin/fe_daq.bash -l NorthLinac gradient_scan --linac-zones 1L22 1L23 1L24 1L25 -s 0.1 -n 320 --num-cavities 1 --max-cavity-steps 10
