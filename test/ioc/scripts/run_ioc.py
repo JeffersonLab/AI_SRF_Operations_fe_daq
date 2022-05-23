@@ -50,12 +50,13 @@ def save_pid():
 
 
 def setup_ndx() -> None:
-    for i in ['1L05', '1L06', '1L07', '1L08', '1L21', '1L22', '1L23', '1L24', '1L25', '1L26', '1L27', '1S01', '1S02']:
+    for i in ['1L05', '1L06', '1L07', '1L08', '1L10', '1L21', '1L22', '1L23', '1L24', '1L25', '1L26', '1L27', '1S01',
+              '1S02']:
         pv_name = f"{prefix}INX{i}_nCur"
         PVs[pv_name] = PV(pv_name)
         pv_name = f"{prefix}INX{i}_gCur"
         PVs[pv_name] = PV(pv_name)
-    for i in ['NL05', 'NL07', 'NL21', 'NL23', 'NL25', 'NL27']:
+    for i in ['1L05', '1L07', '1L10', '1L21', '1L23', '1L25', '1L27']:
         pv_name = f"{prefix}NDX{i}_CAPACITOR_SW"
         PVs[pv_name] = PV(pv_name)
         pv_name = f"{prefix}NDX{i}_PERIOD"
@@ -153,8 +154,8 @@ def update_ndx(force_change):
             num_active = 0
             noise = np.random.uniform(0, 0.01)
 
-            # Sometimes the unit tests want to mess directly with the gCur/nCur values.  Only update if the GSET was recently
-            # changed.  Make sure to mark the "recently changed" flag to false after we process it.
+            # Sometimes the unit tests want to mess directly with the gCur/nCur values.  Only update if the GSET was
+            # recently changed.  Make sure to mark the "recently changed" flag to false after we process it.
             for cav in fe_active.keys():
                 if fe_active[cav]:
                     num_active += 1
