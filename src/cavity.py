@@ -234,8 +234,8 @@ class Cavity:
     def restore_pset(self):
         self.pset.put(self.pset_init, wait=True)
 
-    def restore_gset(self):
-        self.set_gradient(self.gset_init)
+    def restore_gset(self, **kwargs):
+        self.set_gradient(self.gset_init, **kwargs)
 
     def wait_for_connections(self, timeout=2):
         """Wait for PVs to connect or timeout.  Then finish object initialization knowing PVs are connected.
