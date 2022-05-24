@@ -20,6 +20,7 @@ fe_active = {}  # Is a cavity field emitting? [str(pvname), bool].  Managed by g
 # Gets changed in main and callback threads
 gc_lock = threading.Lock()
 gset_changed = False  # Has an RF PV change over last iteration?  We'll use this to update radiation PVs
+gmes_changed = {}  # A dictionary of the cavities that have had a gradient change and the new gradient
 
 
 def gset_cb(pvname, value, **kwargs):
@@ -31,6 +32,7 @@ def gset_cb(pvname, value, **kwargs):
     global gset_changed
     with gc_lock:
         gset_changed = True
+        gmes_changed[f"{pvname[0:(len(prefix)+4)]}GMES"] = value
 
     # Only log if this is a state change for the cavity
     if value > fe_onset[pvname]:
@@ -105,21 +107,30 @@ def setup_cavities() -> None:
         # Set the cavities up so that they are at the minimum stable gradient for operations
         pv_name = f"{prefix}{epics_name}GSET"
         pv_list.append(pv_name)
+
         if cavity_type == "C100":
-            val_list.append(10)
+            gradient = 10
         elif cavity_type == "C75":
-            val_list.append(5)
+            gradient = 5
         elif cavity_type == "C50":
-            val_list.append(3)
+            gradient = 3
         elif cavity_type == "C25":
-            val_list.append(3)
+            gradient = 3
         elif cavity_type == "P1R":
-            val_list.append(5)
+            gradient = 5
+
+        val_list.append(gradient)
 
         # Setup a callback that will make radiation signal appear above FE onset
         PVs[pv_name] = PV(pv_name)
         PVs[pv_name].add_callback(gset_cb)
         fe_onset[pv_name] = max(float(max_gset) - 1, 7)  # FE onset here is simply one less than max gradient
+
+        # We don't want to attached the gset_cb to this.
+        pv_name = f"{prefix}{epics_name}GMES"
+        PVs[pv_name] = PV(pv_name)
+        pv_list.append(pv_name)
+        val_list.append(gradient + np.random.uniform(0, 0.5, 1)[0])
 
     caput_many(pv_list, val_list, wait=True)
     print("RF PVs Done!")
@@ -166,6 +177,15 @@ def update_ndx(force_change):
                         pv.value = num_active + noise
 
 
+def update_gmes():
+    global gmes_changed
+    global gc_lock
+    with gc_lock:
+        for gmes_pv_name in gmes_changed.keys():
+            PVs[gmes_pv_name].value = gmes_changed[gmes_pv_name] + np.random.uniform(0, 0.5, 1)[0]
+        gmes_changed = {}
+
+
 if __name__ == "__main__":
     save_pid()
     setup_ndx()
@@ -174,8 +194,11 @@ if __name__ == "__main__":
     while True:
         # Make this slow enough so my unit tests have a chance to make some changes without
         # being overwritten.  0.01 was just a little too fast
-
         time.sleep(0.05)
+
+        if len(gmes_changed.keys()) > 0:
+            update_gmes()
+
         if count % 20 == 0:
             update_ndx(force_change=True)
         else:

@@ -8,6 +8,10 @@ record(ao, "adamc:R$(A)GSET") {
     field(VAL, 5)
     field(PINI, "TRUE")
 }
+record(ao, "adamc:R$(A)GMES") {
+    field(VAL, 4.999)
+    field(PINI, "TRUE")
+}
 record(ao, "adamc:R$(A)ODVH") {
     field(VAL, 20)
     field(PINI, "TRUE")
