@@ -140,22 +140,23 @@ class Cavity:
         # We should be within a single step here.
         self.set_gradient(gset=gset, **kwargs)
 
-    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=10):
+    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=10,
+                     force: bool = False, gradient_epsilon: float = 0.05):
         """Set a cavity's gradient and wait for supporting systems to compensate for the change.
 
-        New change can't be more than 1 MV/m away from current value.  Only supports C100.
+        New change can't be more than 1 MV/m away from current value, without force.  This attempts to wait for a cavity
+        to ramp if requested.  However, it also has a shortcut check that if the GMES is very close to the requested
+        GSET, then it will stop watching as the ramping is essentially over if it happened at all.
 
         Args:
             gset: The new value to set GSET to
             settle_time: How long we need to wait for cryo system to adjust to change in heat load
             wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C100s ramp for larger steps.
             ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
+            force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
+            gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
 
         """
-        if self.cavity_type != "C100":
-            msg = f"{self.name}: We can only adjust gradients on C100s."
-            logger.error(msg)
-            raise ValueError(msg)
 
         if gset != 0 and self.bypassed_eff:
             msg = f"{self.name}: Can't turn on bypassed cavity"
@@ -170,7 +171,7 @@ class Cavity:
             logger.error(msg)
             raise ValueError(msg)
         current = self.gset.get(use_monitor=False)
-        if abs(gset - current) > 1.001:
+        if (not force) and abs(gset - current) > 1.001:
             msg = f"{self.name}: Can't move GSET more than 1 MV/m at a time. (new: {gset}, current: {current})"
             logger.error(msg)
             raise ValueError(msg)
@@ -190,6 +191,11 @@ class Cavity:
                 ramp_started = self.is_gradient_ramping()
                 if ramp_started:
                     logger.info(f"{self.name} is ramping gradient")
+                    break
+                # Add a sleep/monitor and check if we've reached our target gradient.  If we're this close and the
+                # cavity is not ramping, then it's very unlikely  to ramp.  This difference is the usual noise in GMES.
+                StateMonitor.monitor(0.05)
+                if math.fabs(gset - self.gmes.value()) < gradient_epsilon:
                     break
 
             if ramp_started:
