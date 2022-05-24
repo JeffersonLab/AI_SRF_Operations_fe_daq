@@ -281,12 +281,12 @@ def setup_zone_baseline_gradient(zone, linac, baseline_gradient, background_n_sa
     # Establish the low baseline
     logger.info(f"Walking cavities to baseline ({baseline_gradient} MV/m)")
     for cav in zone.cavities:
-        if baseline_gradient < cavity.gset_min:
+        if baseline_gradient < cav.gset_min:
             raise ValueError(
                 f"{cav.name} - Can't set baseline ({baseline_gradient}) below minimum stable gradient "
                 f"({cav.gset_min})")
         if abs(cav.gset.value - baseline_gradient) > 0.01:
-            logger.info(f"Walking {cavity.name} from {cav.gest.value} -> {baseline_gradient}")
+            logger.info(f"Walking {cav.name} from {cav.gest.value} -> {baseline_gradient}")
             cav.walk_gradient(baseline_gradient)
 
     logger.info(f"Measuring {background_n_samples} radiation samples to use as background")
@@ -663,3 +663,87 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
 #                         if not response.startswith('y'):
 #                             logger.info("Exiting after error based on user response.")
 #                             raise ex
+
+
+def simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step_size: float = 1,
+                         settle_time: float = 6.0, max_cavity_steps: int = 2) -> None:
+    """This performs a simple scan on all cavities in a linac, one cavity at a time.
+
+    Each cavity is stepped up from their initial value at most max_cavity_steps, in step of size step_size.  If the
+    next step would have exceeded the maximum/minimum allowable gradient for that cavity, we set it to the max. Then the
+    cavity is returned to it's initial value, and stepped down in a similar fashion.  Finally the cavity is returned to
+    it's initial value, and the next cavity is scanned.
+    """
+
+    logger.info(f"Starting simple_gradient_scan")
+
+    zone_names = list(linac.zones.keys())
+
+    with open(data_file, mode="a") as f:
+        f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
+        f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
+
+        for cav_name in linac.cavities.keys():
+            cavity = linac.cavities[cav_name]
+            gset_curr = cavity.gset.value
+            gset_max = cavity.gset_max
+            gset_min = cavity.gset_min
+            logger.info(f"Scanning {cavity.name}.  gset_curr={gset_curr}, gset_min={gset_min}, gset_max={gset_max}")
+
+            # Figure out the applicable gradient steps for this cavity
+            gsets = []
+            for i in range(1, max_cavity_steps + 1):
+                gradient = gset_curr + (step_size * i)
+                if gradient >= gset_max:
+                    logger.info(f"{cavity.name}: Limited to +{gset_max - gset_curr} MV/m above initial.")
+                    gsets.append(gset_max)
+                    break
+                gsets.append(gradient)
+
+            for i in range(1, max_cavity_steps + 1):
+                gradient = gset_curr - (step_size * i)
+                if gradient <= gset_min:
+                    logger.info(f"{cavity.name}: Limited to -{gset_curr - gset_min} MV/m below initial.")
+                    gsets.append(gset_min)
+                    break
+                gsets.append(gradient)
+
+            for gset_next in gsets:
+                try:
+                    gset_curr = cavity.gset.value
+                    logger.info("Jiggling linac phases within +/- 5 degrees of initial")
+                    linac.jiggle_psets(5.0)
+
+                    # Here we are allowing larger step sizes than 1 MV/m (force=True)
+                    logger.info(f"{cavity.name}:  Stepping gradient {gset_curr} => {gset_next}.")
+                    StateMonitor.check_state()
+                    cavity.set_gradient(gset=gset_next, settle_time=settle_time, wait_for_ramp=True, force=True)
+
+                    # We expect set_gradient to possible wait for cryo.  This scan will likely not wait for cryo.
+                    settle_end = datetime.now()
+                    settle_start = settle_end - timedelta(seconds=settle_time)
+
+                    logger.info(f"Waiting on averaging time ({avg_time} seconds)")
+                    avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
+
+                    # Write out sample time to file
+                    fmt = "%Y-%m-%d %H:%M:%S.%f"
+                    settle_start_str = settle_start.strftime(fmt)
+                    settle_end_str = settle_end.strftime(fmt)
+                    avg_start_str = avg_start.strftime(fmt)
+                    avg_end_str = avg_end.strftime(fmt)
+
+                    # Write out the timestamps for this sample
+                    logger.info("Writing to data log")
+                    f.write(
+                        f"{settle_start_str},{settle_end_str},{avg_start_str},{avg_end_str},{settle_time},"
+                        f"{avg_time},{cavity.name},{cavity.epics_name}\n")
+                    f.flush()
+
+                except Exception as ex:
+                    msg = f"Exception occurred during gradient scan\n{ex}"
+                    logger.error(msg)
+                    response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
+                    if not response.startswith('y'):
+                        logger.info("Exiting after error based on user response.")
+                        raise ex
