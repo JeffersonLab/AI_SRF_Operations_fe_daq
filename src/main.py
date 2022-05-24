@@ -94,7 +94,7 @@ def main() -> int:
                                  help="How long in seconds to let CEBAF sit after making changes to RF")
     simple_gradient.add_argument('-a', '--average-time', default=3,
                                  help="How many seconds of data should we allow the archiver to collect to average results")
-    simple_gradient.add_argument('-s', '--step-size', required=True, type=float,
+    simple_gradient.add_argument('-S', '--step-size', required=True, type=float,
                                  help="How large of a gradient step to take each time. Max value of 1.0.", default=1.0)
     simple_gradient.add_argument('-n', '--num-steps', required=True, type=int,
                                  help="How many times should a cavity be stepped up and down.", default=2)
@@ -159,13 +159,14 @@ def main() -> int:
             linac = LinacFactory(testing=testing).create_linac(name=linac_name, zone_names=zone_names)
 
             logger.info("Starting gradient scan")
-            procedures.run_gradient_scan_levelized_walk(linac=linac, avg_time=average_time, num_steps=num_steps,
-                                                        step_size=step_size,
-                                                        data_file=os.path.join(log_dir, "gradient-scan.csv"),
-                                                        n_cavities=n_cavities, max_cavity_steps=max_cavity_steps)
-
-            # Put the PSETs back where you found them.
-            linac.restore_psets()
+            try:
+                procedures.run_gradient_scan_levelized_walk(linac=linac, avg_time=average_time, num_steps=num_steps,
+                                                            step_size=step_size,
+                                                            data_file=os.path.join(log_dir, "gradient-scan.csv"),
+                                                            n_cavities=n_cavities, max_cavity_steps=max_cavity_steps)
+            finally:
+                # Put the PSETs back where you found them.  User may exit mid scan via exception.  Always try to run
+                linac.restore_psets()
 
         elif args.command == 'simple_gradient_scan':
             zone_names = args.limac_zones
@@ -179,11 +180,15 @@ def main() -> int:
             linac = LinacFactory(testing=testing).create_linac(name=linac_name, zone_names=zone_names)
 
             logger.info("Starting simple gradient scan")
-            procedures.run_simple_gradient_scan(linac=linac, avg_time=average_time,
-                                                data_file=os.path.join(log_dir, "simple-gradient-scan.csv"),
-                                                step_size=step_size, settle_time=settle_time,
-                                                max_cavity_steps=num_steps)
-
+            try:
+                procedures.run_simple_gradient_scan(linac=linac, avg_time=average_time,
+                                                    data_file=os.path.join(log_dir, "simple-gradient-scan.csv"),
+                                                    step_size=step_size, settle_time=settle_time,
+                                                    max_cavity_steps=num_steps)
+            finally:
+                # Put the PSETs back where you found them.  If the user exits in the middle of the scan, we want to
+                # return PSETs no matter what.
+                linac.restore_psets()
 
         else:
             raise ValueError("Command required. fe_onset, gradient_scan")
