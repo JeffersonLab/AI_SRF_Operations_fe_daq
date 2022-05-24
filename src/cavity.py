@@ -13,7 +13,8 @@ logger = logging.getLogger(__name__)
 
 class Cavity:
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
-                 bypassed: bool, zone: 'Zone', gset_no_fe: float = None, gset_fe_onset: float = None):
+                 bypassed: bool, zone: 'Zone', gset_no_fe: float = None, gset_fe_onset: float = None,
+                 gset_max: float = None):
         self.name = name
         self.epics_name = epics_name
         self.zone_name = zone.name
@@ -39,6 +40,7 @@ class Cavity:
         self.gmes = epics.PV(f"{self.epics_name}GMES", connection_callback=connection_cb)
         self.pset = epics.PV(f"{self.epics_name}PSET", connection_callback=connection_cb)
         self.odvh = epics.PV(f"{self.epics_name}ODVH", connection_callback=connection_cb)
+        self.drvh = epics.PV(f"{self.epics_name}GSET.DRVH", connection_callback=connection_cb)
         self.pset_init = self.pset.get()
         self.gset_init = self.gset.get()
 
@@ -71,6 +73,13 @@ class Cavity:
             self.bypassed_eff = True
         elif self.odvh.value == 0:
             self.bypassed_eff = True
+
+        # Each cavity keeps track of an externally set maximum value
+        if gset_max is None:
+            self.gset_max = self.odvh.value
+        elif gset_max > self.drvh.value:
+            logger.warning(
+                f"{self.name}: Tried to set gset_max > GSET.DRVH.  Set gset_max = GSET.DRVH ({self.drvh.value})")
 
     def is_rf_on(self):
         """A simple method to determine if RF is on in a cavity"""
