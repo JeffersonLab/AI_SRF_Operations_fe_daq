@@ -88,7 +88,7 @@ def main() -> int:
     gradient.add_argument('--max-cavity-steps', required=False, type=int,
                           help="How many times a single cavity is allowed to be stepped down (unlimited by default).")
 
-    simple_gradient.add_argument('--linac-zones', nargs="+", required=True,
+    simple_gradient.add_argument('--linac-zones', nargs="+", required=False, default=None,
                                  help="Selection of zones from linac that will be included in test. All if empty")
     simple_gradient.add_argument('-s', '--settle-time', default=0,
                                  help="How long in seconds to let CEBAF sit after making changes to RF")
@@ -169,11 +169,11 @@ def main() -> int:
                 linac.restore_psets()
 
         elif args.command == 'simple_gradient_scan':
-            zone_names = args.limac_zones
+            zone_names = args.linac_zones
             average_time = float(args.average_time)
             step_size = float(args.step_size)
             num_steps = int(args.num_steps)
-            settle_time = args.settle_time
+            settle_time = float(args.settle_time)
 
             # Setup the Linac, Zones, and Cavities
             logger.info(f"Creating linac {linac_name} with {zone_names}")
