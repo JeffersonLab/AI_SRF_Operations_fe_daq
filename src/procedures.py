@@ -746,4 +746,8 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                     response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
                     if not response.startswith('y'):
                         logger.info("Exiting after error based on user response.")
+                        logger.info(f"{cavity.name}: Attempting to restoring cavity gradient")
+                        cavity.restore_gset()
                         raise ex
+
+                cavity.restore_gset()
