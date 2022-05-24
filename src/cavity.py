@@ -65,7 +65,8 @@ class Cavity:
         if not self.bypassed:
             self.rf_on.add_callback(rf_on_cb)
 
-        self.pv_list = [self.gset, self.pset, self.odvh, self.rf_on]
+        # List of all PVs related to a cavity.
+        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on, self.stat1]
 
         # Cavity can be effectively bypassed in a number of ways.  Work through that here.
         self.bypassed_eff = bypassed
@@ -175,8 +176,8 @@ class Cavity:
             msg = f"{self.name}: Can't turn cavity below operational min"
             logger.error(msg)
             raise ValueError(msg)
-        if gset > self.odvh.value:
-            msg = f"{self.name}: Can't turn cavity above operational max (ODVH={self.odvh.value})"
+        if gset > self.gset_max:
+            msg = f"{self.name}: Can't turn cavity above operational max (gset_max={self.gset_max})"
             logger.error(msg)
             raise ValueError(msg)
         current = self.gset.get(use_monitor=False)
