@@ -665,8 +665,8 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
 #                             raise ex
 
 
-def simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step_size: float = 1,
-                         settle_time: float = 6.0, max_cavity_steps: int = 2) -> None:
+def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step_size: float = 1,
+                             settle_time: float = 6.0, max_cavity_steps: int = 2) -> None:
     """This performs a simple scan on all cavities in a linac, one cavity at a time.
 
     Each cavity is stepped up from their initial value at most max_cavity_steps, in step of size step_size.  If the
