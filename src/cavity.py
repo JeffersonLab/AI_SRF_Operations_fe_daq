@@ -66,7 +66,9 @@ class Cavity:
             self.rf_on.add_callback(rf_on_cb)
 
         # List of all PVs related to a cavity.
-        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on, self.stat1]
+        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on]
+        if self.stat1 is not None:
+            self.pv_list.append(self.stat1)
 
         # Cavity can be effectively bypassed in a number of ways.  Work through that here.
         self.bypassed_eff = bypassed
