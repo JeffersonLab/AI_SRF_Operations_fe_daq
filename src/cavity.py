@@ -207,7 +207,7 @@ class Cavity:
                 # Add a sleep/monitor and check if we've reached our target gradient.  If we're this close and the
                 # cavity is not ramping, then it's very unlikely  to ramp.  This difference is the usual noise in GMES.
                 StateMonitor.monitor(0.05)
-                if math.fabs(gset - self.gmes.value()) < gradient_epsilon:
+                if math.fabs(gset - self.gmes.value) < gradient_epsilon:
                     break
 
             if ramp_started:
