@@ -1,3 +1,4 @@
+import math
 from datetime import datetime
 from typing import Union
 
@@ -17,6 +18,7 @@ class Cavity:
         self.epics_name = epics_name
         self.zone_name = zone.name
         self.cavity_type = cavity_type
+        self.controls_type = zone.controls_type  # These should be '1.0', '2.0', etc. LLRF controls.
         self.length = length
         self.bypassed = bypassed
         self.zone = zone
@@ -34,25 +36,28 @@ class Cavity:
             raise ValueError(msg)
 
         self.gset = epics.PV(f"{self.epics_name}GSET", connection_callback=connection_cb)
+        self.gmes = epics.PV(f"{self.epics_name}GMES", connection_callback=connection_cb)
         self.pset = epics.PV(f"{self.epics_name}PSET", connection_callback=connection_cb)
         self.odvh = epics.PV(f"{self.epics_name}ODVH", connection_callback=connection_cb)
         self.pset_init = self.pset.get()
         self.gset_init = self.gset.get()
 
         # Create "RF On" PV and min stable gradient setting for each type of cavity
-        if self.cavity_type in ("C100", "C75", "P1R"):
-            # 1 = RF on, 0 = RF off
-            self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
-            self.gset_min = 5
-        elif self.cavity_type in ("C50", "C25"):
+        if self.controls_type == '1.0':
             # 1 = RF on, 0 = RF off
             self.rf_on = epics.PV(f"{self.epics_name}ACK1.B6", connection_callback=connection_cb)
-            self.gset_min = 3
-
-        if self.cavity_type == "C100":
-            self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
-        else:
             self.stat1 = None
+            self.gset_min = 3
+        elif self.controls_type == '2.0':
+            # 1 = RF on, 0 = RF off
+            self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
+            self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
+            self.gset_min = 5
+        elif self.controls_type == '3.0':
+            # 1 = RF on, 0 = RF off
+            self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
+            self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
+            self.gset_min = 5
 
         # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
         if not self.bypassed:
@@ -67,13 +72,30 @@ class Cavity:
         elif self.odvh.value == 0:
             self.bypassed_eff = True
 
-    def is_gradient_ramping(self):
-        if self.stat1 is None:
-            raise RuntimeError("Ramping check is not supported on this cavity.")
+    def is_rf_on(self):
+        """A simple method to determine if RF is on in a cavity"""
+        return self.rf_on.value == 1
 
-        # The "is ramping" field is the 11th bit counting from zero.  If it's zero, then we're not ramping.  Otherwise,
-        # we're ramping.
-        return int(self.stat1.value) & 0x0800 > 0
+    def is_gradient_ramping(self):
+        """Determine if the cavity gradient is ramping to the target."""
+        if not self.is_rf_on():
+            raise RuntimeError(f"RF is off at {self.name}")
+
+        if self.stat1 is None:
+            # For 6 GeV controls (LLRF 1.0), I don't know a simple check.  Gradient should be close to GSET if not,
+            # we will call it ramping.  I don't think these old cavities have a built-in ramping feature.
+            is_ramping = math.fabs(self.gmes.value - self.gset.value) > 0.15
+        else:
+            if self.controls_type == '2.0':
+                # For C100, the "is ramping" field is the 11th bit counting from zero.  If it's zero, then we're not
+                # ramping.  Otherwise, we're ramping.
+                is_ramping = int(self.stat1.value) & 0x0800 > 0
+            elif self.controls_type == '3.0':
+                # For C75, the "is ramping" field is the 15th bit counting from zero.  If it's zero, then we're not
+                # ramping.  Otherwise, we're ramping.  (Per K. Hesse)
+                is_ramping = int(self.stat1.value) & 0x8000 > 0
+
+        return is_ramping
 
     def get_jiggled_pset_value(self, delta: float) -> float:
         """Calculate a random.uniform offset from pset_init of maximum +/- 5.  No changes to EPICS"""
@@ -117,7 +139,6 @@ class Cavity:
 
         # We should be within a single step here.
         self.set_gradient(gset=gset, **kwargs)
-
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=10):
         """Set a cavity's gradient and wait for supporting systems to compensate for the change.
