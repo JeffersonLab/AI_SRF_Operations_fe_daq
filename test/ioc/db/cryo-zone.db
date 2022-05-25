@@ -1,0 +1,6 @@
+# ZONE should be CED Zone, e.g. 1L02
+# JT Valve Stroke percentage.  One per zone
+record(ai, "adamc:CEV$(ZONE)JT.ORBV") {
+    field(VAL, 80)
+    field(PINI, "TRUE")
+}
