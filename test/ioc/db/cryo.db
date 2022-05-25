@@ -1,0 +1,23 @@
+# Linac Pressure at the North Linac "T"
+record(ai, "adamc:CPI4107B") {
+    field(VAL, 0.385)
+    field(PINI, "TRUE")
+}
+
+# Linac Pressure at the North Linac "T"
+record(ai, "adamc:CPI5107B") {
+    field(VAL, 0.385)
+    field(PINI, "TRUE")
+}
+
+# North Linac heater margin
+record(ai, "adamc:CAPHTRMGN") {
+    field(VAL, 2)
+    field(PINI, "TRUE")
+}
+
+# South Linac heater margin
+record(ai, "adamc:CAPHTRMGN2") {
+    field(VAL, 2)
+    field(PINI, "TRUE")
+}
