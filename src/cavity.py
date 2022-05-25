@@ -173,6 +173,7 @@ class Cavity:
         if gset != 0 and self.bypassed_eff:
             msg = f"{self.name}: Can't turn on bypassed cavity"
             logger.error(msg)
+            logger.error(f"gset_init={self.gset_init}, self.bypassed={self.bypassed}, self.bypassed_eff={self.bypassed_eff}, self.gset={self.gset.value}")
             raise ValueError(msg)
         if gset != 0 and gset < self.gset_min:
             msg = f"{self.name}: Can't turn cavity below operational min"
@@ -235,7 +236,8 @@ class Cavity:
         self.pset.put(self.pset_init, wait=True)
 
     def restore_gset(self, **kwargs):
-        self.set_gradient(self.gset_init, **kwargs)
+        if self.gset.value != self.gset_init:
+            self.walk_gradient(self.gset_init, **kwargs)
 
     def wait_for_connections(self, timeout=2):
         """Wait for PVs to connect or timeout.  Then finish object initialization knowing PVs are connected.
