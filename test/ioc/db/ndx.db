@@ -23,9 +23,9 @@ record(ao, "adamc:$(E)_PERIOD") {
 }
 record(ao, "adamc:$(E)_HV_BIAS") {
     field(VAL, 1000)
-    field(PINI, "TRUE")
+    field(PINI, "YES")
 }
 record(ao, "adamc:$(E)_HV_RBCK") {
     field(VAL, 975)
-    field(PINI, "TRUE")
+    field(PINI, "YES")
 }
