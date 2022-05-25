@@ -22,6 +22,9 @@ gc_lock = threading.Lock()
 gset_changed = False  # Has an RF PV change over last iteration?  We'll use this to update radiation PVs
 gmes_changed = {}  # A dictionary of the cavities that have had a gradient change and the new gradient
 
+# How the largest amount of noise in the gradient readback
+max_gradient_noise = 0.05
+
 
 def gset_cb(pvname, value, **kwargs):
     if pvname not in fe_onset.keys():
@@ -130,7 +133,7 @@ def setup_cavities() -> None:
         pv_name = f"{prefix}{epics_name}GMES"
         PVs[pv_name] = PV(pv_name)
         pv_list.append(pv_name)
-        val_list.append(gradient + np.random.uniform(0, 0.5, 1)[0])
+        val_list.append(gradient + np.random.uniform(0, max_gradient_noise, 1)[0])
 
     caput_many(pv_list, val_list, wait=True)
     print("RF PVs Done!")
@@ -182,7 +185,7 @@ def update_gmes():
     global gc_lock
     with gc_lock:
         for gmes_pv_name in gmes_changed.keys():
-            PVs[gmes_pv_name].value = gmes_changed[gmes_pv_name] + np.random.uniform(0, 0.5, 1)[0]
+            PVs[gmes_pv_name].value = gmes_changed[gmes_pv_name] + np.random.uniform(0, max_gradient_noise, 1)[0]
         gmes_changed = {}
 
 
