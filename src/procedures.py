@@ -685,6 +685,11 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
 
         for cav_name in linac.cavities.keys():
             cavity = linac.cavities[cav_name]
+            if cavity.bypassed_eff:
+                logger.info(f"{cavity.name} is effectively bypassed.  Skipping.")
+                logger.info(f"{cavity.name}: gset_init={cavity.gset_init}, self.bypassed={cavity.bypassed}, "
+                            f"self.bypassed_eff={cavity.bypassed_eff}, self.gset={cavity.gset.value}")
+                continue
             gset_curr = cavity.gset.value
             gset_max = cavity.gset_max
             gset_min = cavity.gset_min
@@ -708,6 +713,8 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                     break
                 gsets.append(gradient)
 
+            logger.info(f"{cavity.name}:  GSETs to scan {gsets}")
+
             for gset_next in gsets:
                 try:
                     gset_curr = cavity.gset.value
@@ -715,8 +722,8 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                     linac.jiggle_psets(5.0)
 
                     # Here we are allowing larger step sizes than 1 MV/m (force=True)
-                    logger.info(f"{cavity.name}:  Stepping gradient {gset_curr} => {gset_next}.")
                     StateMonitor.check_state()
+                    logger.info(f"{cavity.name}:  Stepping gradient {gset_curr} => {gset_next}.")
                     cavity.set_gradient(gset=gset_next, settle_time=settle_time, wait_for_ramp=True, force=True)
 
                     # We expect set_gradient to possible wait for cryo.  This scan will likely not wait for cryo.
@@ -750,4 +757,5 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                         cavity.restore_gset()
                         raise ex
 
-                cavity.restore_gset()
+            # Walk the gradient back, and wait one second before each step.
+            cavity.restore_gset(settle_time=1)
