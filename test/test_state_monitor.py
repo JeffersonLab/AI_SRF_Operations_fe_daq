@@ -125,3 +125,4 @@ class TestStateMonitor(TestCase):
         time.sleep(0.01)
         with self.assertRaises(Exception) as context:
             StateMonitor.monitor(duration=0, user_input=False)
+        ndxe.hv_read_back.put(975, wait=True)
