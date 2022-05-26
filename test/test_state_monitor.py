@@ -13,9 +13,11 @@ from state_monitor import StateMonitor
 
 logger = logging.getLogger()
 logger.setLevel(logging.ERROR)
+prefix = "adamc:"
+jt_suffix = ""
 
 def reinit_all():
-    # "Restart EPICS
+    # "Restart" EPICS.
     epics.ca.destroy_context()
     time.sleep(0.1)
     epics.ca.create_context()
@@ -61,7 +63,7 @@ class TestStateMonitor(TestCase):
 
         # Create a cavity with supporting structure
         linac = Linac(name="NorthLinac")
-        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0')
+        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
         logger.warning("Creating R1M1 cavity")
         cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
                      zone=z_1L22)
@@ -87,7 +89,7 @@ class TestStateMonitor(TestCase):
 
         # Create a cavity with supporting structure
         linac = Linac(name="NorthLinac")
-        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0')
+        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
         logger.warning("Creating R1M1 cavity")
         cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
                      zone=z_1L22)
@@ -107,7 +109,7 @@ class TestStateMonitor(TestCase):
 
         # Create a cavity with supporting structure
         linac = Linac(name="NorthLinac")
-        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0')
+        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
         logger.warning("Creating R1M1 cavity")
         cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
                      zone=z_1L22)
@@ -126,3 +128,19 @@ class TestStateMonitor(TestCase):
         with self.assertRaises(Exception) as context:
             StateMonitor.monitor(duration=0, user_input=False)
         ndxe.hv_read_back.put(975, wait=True)
+
+    def test_jt_valve_monitoring(self):
+        # Clear out previous state
+        reinit_all()
+
+        # Create a cavity with supporting structure
+        linac = Linac(name="NorthLinac")
+        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
+        old_value = z_1L22.jt_stroke.value
+        z_1L22.jt_stroke.put(95, wait=True)
+
+        with self.assertRaises(Exception) as context:
+            StateMonitor.check_state(user_input=False)
+        z_1L22.jt_stroke.put(old_value, wait=True)
+
+        StateMonitor.check_state(user_input=False)
