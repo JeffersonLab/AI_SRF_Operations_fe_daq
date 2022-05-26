@@ -15,12 +15,26 @@ logger = logging.getLogger(__name__)
 
 
 class Linac:
-    def __init__(self, name: str):
+    def __init__(self, name: str, prefix: str):
         self.name = name
         self.zones = {}
         self.cavities = {}
         self.ndx_detectors = {}
         self.ndx_electrometers = {}
+
+        if name == "NorthLinac":
+            self.linac_pressure = epics.PV(f"{prefix}CPI4107B", connection_callback=connection_cb)
+            self.heater_margin = epics.PV(f"{prefix}CAPHTRMGN", connection_callback=connection_cb)
+        elif name == "SouthLinac":
+            self.linac_pressure = epics.PV(f"{prefix}CPI5107B", connection_callback=connection_cb)
+            self.heater_margin = epics.PV(f"{prefix}CAPHTR2MGN", connection_callback=connection_cb)
+        else:
+            raise ValueError(f"Unsupported linac name '{name}'")
+
+        # We need to watch and make sure that we don't exceed linac pressure or heater margin requirements for stable
+        # operations.
+        self.linac_pressure.add_callback(get_threshold_cb(high=0.039))  # Nominal linac pressure is 0.0385.
+        self.heater_margin.add_callback(get_threshold_cb(low=1.01))  # We want margin > 1
 
     def add_cavity(self, cavity: Cavity):
         """Add a cavity to a linac and it's zone as needed"""
@@ -139,7 +153,7 @@ class Zone:
 
         # The JT strove PV is normally a ORBV field which is a read only field.  During testing we work with the VAL
         # field.
-        self.jt_stroke = epics.PV(f"{prefix}:CEV{name}JT{jt_suffix}", connection_callback=connection_cb)
+        self.jt_stroke = epics.PV(f"{prefix}CEV{name}JT{jt_suffix}", connection_callback=connection_cb)
         self.jt_stroke.add_callback(callback=get_threshold_cb(high=92))
 
     def add_cavity(self, cavity: Cavity):
@@ -205,7 +219,10 @@ class LinacFactory:
         
         Segmask name format  is NorthLinac, SouthLinac.
         """
-        linac = Linac(name)
+        prefix = ""
+        if self.testing:
+            prefix = "adamc:"
+        linac = Linac(name, prefix="adamc:")
         self._setup_zones(linac=linac, zone_names=zone_names)
         self._setup_cavities(linac)
         self._setup_ndx(linac, electrometer_names=electrometer_names, detector_names=detector_names)

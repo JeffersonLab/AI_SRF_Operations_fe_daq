@@ -134,7 +134,7 @@ class TestStateMonitor(TestCase):
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac = Linac(name="NorthLinac")
+        linac = Linac(name="NorthLinac", prefix=prefix)
         z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
         old_value = z_1L22.jt_stroke.value
         z_1L22.jt_stroke.put(95, wait=True)
@@ -143,4 +143,38 @@ class TestStateMonitor(TestCase):
             StateMonitor.check_state(user_input=False)
         z_1L22.jt_stroke.put(old_value, wait=True)
 
+        StateMonitor.check_state(user_input=False)
+
+    def test_linac_pressure_monitoring(self):
+        # Clear out previous state
+        reinit_all()
+
+        # Create a cavity with supporting structure
+        linac = Linac(name="NorthLinac", prefix=prefix)
+        old_value = linac.linac_pressure.value
+        linac.linac_pressure.put(100, wait=True)
+        time.sleep(0.01)
+
+        with self.assertRaises(Exception) as context:
+            StateMonitor.check_state(user_input=False)
+
+        linac.linac_pressure.put(old_value, wait=True)
+        time.sleep(0.01)
+        StateMonitor.check_state(user_input=False)
+
+    def test_linac_heat_margin_monitoring(self):
+        # Clear out previous state
+        reinit_all()
+
+        # Create a cavity with supporting structure
+        linac = Linac(name="NorthLinac", prefix=prefix)
+        old_value = linac.heater_margin.value
+        linac.heater_margin.put(1, wait=True)
+        time.sleep(0.01)
+
+        with self.assertRaises(Exception) as context:
+            StateMonitor.check_state(user_input=False)
+
+        linac.heater_margin.put(old_value, wait=True)
+        time.sleep(0.01)
         StateMonitor.check_state(user_input=False)

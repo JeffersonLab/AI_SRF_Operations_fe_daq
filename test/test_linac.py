@@ -89,7 +89,7 @@ class TestLinacFactory(TestCase):
         lf = LinacFactory(testing=True)
 
         # Check that the segmask filtering works
-        linac = Linac("NorthLinac")
+        linac = Linac("NorthLinac", prefix="adamc:")
         lf._setup_zones(linac)
         lf._setup_cavities(linac)
 
@@ -101,7 +101,7 @@ class TestLinacFactory(TestCase):
         lf = LinacFactory(testing=True)
 
         # Check that the segmask filtering works
-        linac = Linac("NorthLinac")
+        linac = Linac("NorthLinac", prefix="adamc:")
         lf._setup_zones(linac)
 
         self.assertEqual(linac.zones['1L19'].name, '1L19')
@@ -109,7 +109,7 @@ class TestLinacFactory(TestCase):
         self.assertTrue("2L10" not in linac.zones.keys())
 
         # Check that the zone_names filtering works
-        linac = Linac("NorthLinac")
+        linac = Linac("NorthLinac", prefix="adamc:")
         lf._setup_zones(linac, zone_names=['1L19'])
 
         self.assertEqual(linac.zones['1L19'].name, '1L19')
@@ -127,7 +127,7 @@ class TestLinacFactory(TestCase):
 class TestLinac(TestCase):
 
     def test_add_cavity(self):
-        linac = Linac("TestLinac")
+        linac = Linac("NorthLinac", prefix="adamc:")
         zone = Zone(name='1L11', linac=linac, controls_type='1.0')
         linac.zones[zone.name] = zone
         cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone)
@@ -221,7 +221,7 @@ class TestLinac(TestCase):
 class TestZone(TestCase):
 
     def test_add_cavity(self):
-        linac = Linac("TestLinac")
+        linac = Linac("NorthLinac", prefix="adamc:")
         zone = Zone(name='1L11', linac=linac, controls_type='1.0')
         linac.zones[zone.name] = zone
         cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone)
