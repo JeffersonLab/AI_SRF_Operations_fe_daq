@@ -57,14 +57,25 @@ def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) 
             raise ValueError("Low must be less than high thresholds")
 
     def threshold_cb(pvname: str, value: float, ** kwargs) -> None:
+        is_low = False
+        is_high = False
         if low is not None:
             if value < low:
-                StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=low, kind='<')
-                logger.error(f"{pvname} is below threshold ({value} < {low})")
+                is_low = True
+
         if high is not None:
             if value > high:
-                StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=high, kind='>')
-                logger.error(f"{pvname} is above threshold ({value} > {high})")
+                is_high = True
+
+        if not is_low and not is_high:
+            StateMonitor.threshold_recovered(pvname=pvname)
+        elif is_low:
+            StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=low, kind='<')
+            logger.error(f"{pvname} is below threshold ({value} < {low})")
+        elif is_high:
+            StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=high, kind='>')
+            logger.error(f"{pvname} is above threshold ({value} > {high})")
+
 
     return threshold_cb
 
@@ -110,6 +121,8 @@ class StateMonitor:
         with cls.__state_lock:
             cls.__pv_connected = {}
             cls.__rf_on = {}
+            cls.__hv_bad = {}
+            cls.__threshold_exceeded = {}
 
     @classmethod
     def output_state(cls) -> str:
@@ -153,10 +166,12 @@ __threshold_exceeded: {ascii(cls.__threshold_exceeded)}"""
             cls.__threshold_exceeded[pvname] = (threshold, value, kind)
 
     @classmethod
-    def threshold_recovered(cls, pvname: str, threshold: float, value: float, kind: str) -> None:
+    def threshold_recovered(cls, pvname: str) -> None:
         """Track when a PV's threshold has been exceeded."""
         with cls.__state_lock:
-            del cls.__threshold_exceeded[pvname]
+            if (cls.__get_threshold_exceeded_count() > 0) and (pvname in cls.__threshold_exceeded.keys()):
+                del cls.__threshold_exceeded[pvname]
+                logger.info(f"{pvname} back within threshold.")
 
     @classmethod
     def pv_disconnected(cls, pvname) -> None:
