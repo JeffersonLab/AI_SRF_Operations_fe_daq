@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime, timedelta
 from typing import List, Dict
 
 from network import SSLContextAdapter
@@ -11,11 +12,15 @@ import numpy as np
 
 logging.basicConfig(level=logging.DEBUG)
 
+# This is supposed to run a local development softIOC.  Don't try to read/write anywhere else.
+os.environ['EPICS_CA_ADDR_LIST'] = 'localhost'
+
 # Master set of available PVs.  It's global, so be careful.
 PVs = {}
 fe_onset = {}
 prefix = "adamc:"
 fe_active = {}  # Is a cavity field emitting? [str(pvname), bool].  Managed by gset_cb
+JT_valves = {}
 
 # Gets changed in main and callback threads
 gc_lock = threading.Lock()
@@ -24,6 +29,26 @@ gmes_changed = {}  # A dictionary of the cavities that have had a gradient chang
 
 # How the largest amount of noise in the gradient readback
 max_gradient_noise = 0.05
+
+
+def rf_zone_to_ced_zone(zone):
+    names = {
+        'R12': '1L02', 'R13': '1L03', 'R14': '1L04', 'R15': '1L05', 'R16': '1L06', 'R17': '1L07', 'R18': '1L08',
+        'R19': '1L09', 'R1A': '1L10', 'R1B': '1L11', 'R1C': '1L12', 'R1D': '1L13', 'R1E': '1L14', 'R1F': '1L15',
+        'R1G': '1L16', 'R1H': '1L17', 'R1I': '1L18', 'R1J': '1L19', 'R1K': '1L20', 'R1L': '1L21', 'R1M': '1L22',
+        'R1N': '1L23', 'R1O': '1L24', 'R1P': '1L25', 'R1Q': '1L26'
+    }
+    return names[zone]
+
+
+def ced_zone_to_rf_zone(zone):
+    names = {
+        '1L02': 'R12', '1L03': 'R13', '1L04': 'R14', '1L05': 'R15', '1L06': 'R16', '1L07': 'R17', '1L08': 'R18',
+        '1L09': 'R19', '1L10': 'R1A', '1L11': 'R1B', '1L12': 'R1C', '1L13': 'R1D', '1L14': 'R1E', '1L15': 'R1F',
+        '1L16': 'R1G', '1L17': 'R1H', '1L18': 'R1I', '1L19': 'R1J', '1L20': 'R1K', '1L21': 'R1L', '1L22': 'R1M',
+        '1L23': 'R1N', '1L24': 'R1O', '1L25': 'R1P', '1L26': 'R1Q'
+    }
+    return names[zone]
 
 
 def gset_cb(pvname, value, **kwargs):
@@ -35,7 +60,7 @@ def gset_cb(pvname, value, **kwargs):
     global gset_changed
     with gc_lock:
         gset_changed = True
-        gmes_changed[f"{pvname[0:(len(prefix)+4)]}GMES"] = value
+        gmes_changed[f"{pvname[0:(len(prefix) + 4)]}GMES"] = value
 
     # Only log if this is a state change for the cavity
     if value > fe_onset[pvname]:
@@ -86,11 +111,15 @@ def setup_cavities() -> None:
         if elem['name'].startswith("2L"):
             continue
 
+        bypassed = False
+        if 'Bypassed' in elem['properties'].keys():
+            bypassed = True
         epics_name = elem['properties']['EPICSName']
         max_gset = elem['properties']['MaxGSET']
         cavity_type = elem['properties']['CavityType']
         if 'OpsGsetMax' in elem['properties'].keys():
             max_gset = elem['properties']['OpsGsetMax']
+        max_gset = float(max_gset)
 
         # Set the ODVH records to the CED values
         pv_name = f"{prefix}{epics_name}ODVH"
@@ -112,15 +141,17 @@ def setup_cavities() -> None:
         pv_list.append(pv_name)
 
         if cavity_type == "C100":
-            gradient = 10
+            gradient = np.random.uniform(5, max_gset)
         elif cavity_type == "C75":
-            gradient = 5
+            gradient = np.random.uniform(5, max_gset)
         elif cavity_type == "C50":
-            gradient = 3
+            gradient = np.random.uniform(3, max_gset)
         elif cavity_type == "C25":
-            gradient = 3
+            gradient = np.random.uniform(3, max_gset)
         elif cavity_type == "P1R":
-            gradient = 5
+            gradient = np.random.uniform(5, max_gset)
+        if bypassed:
+            gradient = 0
 
         val_list.append(gradient)
 
@@ -189,11 +220,49 @@ def update_gmes():
         gmes_changed = {}
 
 
+class JTValve:
+
+    def __init__(self, zone: str):
+        self.zone = zone
+        self.recovery_datetime = None
+        # This should be the ORBV field and not VAL in production.  But I can't figure out how to write to that
+        # directly during testing.  I think the ORBV field is read only and requires device driver support.
+        self.stroke_pv = PV(f"{prefix}CEV{zone}JT")
+        self.alarm = False
+        PVs[self.stroke_pv.pvname] = self.stroke_pv
+        self.stroke_pv.wait_for_connection(timeout=1)
+
+    def set_jt_high(self):
+        self.recovery_datetime = datetime.now() + timedelta(seconds=5)
+        self.stroke_pv.put(95.1, wait=False)
+        self.alarm = True
+        logging.warning(f"{self.zone} JT valve went high.")
+
+    def check_jt_recovery(self):
+        if self.alarm:
+            if datetime.now() > self.recovery_datetime:
+                self.alarm = False
+                self.stroke_pv.put(np.random.uniform(40, 90))
+                logging.warning(f"{self.zone} JT valve back in spec.")
+
+
+def setup_jt_valves():
+    global JT_valves
+    for zone in ['1L02', '1L03', '1L04', '1L05', '1L06', '1L07', '1L08', '1L09',
+                 '1L10', '1L11', '1L12', '1L13', '1L14', '1L15', '1L16', '1L17', '1L18', '1L19',
+                 '1L20', '1L21', '1L22', '1L23', '1L24', '1L25', '1L26']:
+        JT_valves[zone] = JTValve(zone=zone)
+
+
 if __name__ == "__main__":
     save_pid()
     setup_ndx()
     setup_cavities()
+    setup_jt_valves()
     count = 0
+    p_jt_high = 1e-5
+    #p_jt_high = 1
+
     while True:
         # Make this slow enough so my unit tests have a chance to make some changes without
         # being overwritten.  0.01 was just a little too fast
@@ -207,3 +276,12 @@ if __name__ == "__main__":
         else:
             update_ndx(force_change=False)
         count += 1
+
+        for jt in JT_valves.values():
+            if jt.alarm:
+                jt.check_jt_recovery()
+            # 25 valves * 20 chances per second * 5 second duration * prob_trip_every_step,
+            # implies that 1/10000 prob there will be 0.025 JT valves too high on average.  The math is not the exact
+            # right formula, but good enough for testing without cracking open a book.
+            elif np.random.uniform(0, 1) > (1-p_jt_high):
+                jt.set_jt_high()
