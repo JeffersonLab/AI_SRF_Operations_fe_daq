@@ -9,7 +9,7 @@ import epics
 from cavity import Cavity
 from detector import NDXDetector, NDXElectrometer
 from network import SSLContextAdapter
-from state_monitor import StateMonitor
+from state_monitor import StateMonitor, connection_cb, get_threshold_cb
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +127,7 @@ class Linac:
 
 
 class Zone:
-    def __init__(self, name: str, linac: Linac, controls_type: str):
+    def __init__(self, name: str, linac: Linac, controls_type: str, prefix: str = "", jt_suffix: str = ".ORBV"):
         self.name = name
         self.linac = linac
         self.cavities = {}
@@ -136,6 +136,11 @@ class Zone:
         if controls_type not in supported_controls:
             raise ValueError(f"{name} has unsupported controls type '{controls_type}'")
         self.controls_type = controls_type
+
+        # The JT strove PV is normally a ORBV field which is a read only field.  During testing we work with the VAL
+        # field.
+        self.jt_stroke = epics.PV(f"{prefix}:CEV{name}JT{jt_suffix}", connection_callback=connection_cb)
+        self.jt_stroke.add_callback(callback=get_threshold_cb(high=92))
 
     def add_cavity(self, cavity: Cavity):
         # Add the cavity to the zone if needed
@@ -212,6 +217,11 @@ class LinacFactory:
         ced_url = f"http://{self.ced_server}/inventory?ced={self.ced_instance}&workspace={self.ced_workspace}" \
                   f"&{ced_params}"
         zones = self._get_ced_elements(ced_url)
+        prefix = ""
+        jt_suffix = ".ORBV"
+        if self.testing:
+            prefix = "adamc:"
+            jt_suffix = ""
         for z in zones:
             zone_name = z['name']
             segmask = z['properties']['SegMask']
@@ -221,7 +231,8 @@ class LinacFactory:
                     # Don't filter on zone_name unless a list was supplied
                     if zone_name not in linac.zones.keys():
                         # Add a zone if we haven't seen this before.
-                        linac.zones[zone_name] = Zone(name=zone_name, linac=linac, controls_type=controls_type)
+                        linac.zones[zone_name] = Zone(name=zone_name, linac=linac, controls_type=controls_type,
+                                                      prefix=prefix, jt_suffix=jt_suffix)
 
     def _setup_cavities(self, linac: Linac, no_fe_file="./cfg/no_fe.tsv", fe_onset_file="./cfg/fe_onset.tsv") -> None:
         """Creates cavities from CED data and adds to linac and zone.  Expects _setup_zones to have been run."""

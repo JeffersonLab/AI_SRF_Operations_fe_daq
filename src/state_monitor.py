@@ -2,7 +2,7 @@ import logging
 import threading
 import time
 from datetime import datetime
-from typing import Union, Tuple
+from typing import Union, Tuple, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,27 @@ def hv_read_back_cb(pvname: str, value: float, **kwargs) -> None:
         #logger.info(f"{pvname} is ok {value} (== 1000 +/- 10%).")
 
 
+def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) -> callable:
+    """A generic callback generator for monitoring PVs that need to stay within a certain threshold."""
+    if low is None and high is None:
+        raise ValueError("Either low or high must be specified")
+    if low is not None and high is not None:
+        if low >= high:
+            raise ValueError("Low must be less than high thresholds")
+
+    def threshold_cb(pvname: str, value: float, ** kwargs) -> None:
+        if low is not None:
+            if value < low:
+                StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=low, kind='<')
+                logger.error(f"{pvname} is below threshold ({value} < {low})")
+        if high is not None:
+            if value > high:
+                StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=high, kind='>')
+                logger.error(f"{pvname} is above threshold ({value} > {high})")
+
+    return threshold_cb
+
+
 def rf_on_cb(pvname: str, value: float, **kwargs) -> None:
     """Monitor RF On PVs to make sure that the cavities are good to go for data collection"""
 
@@ -81,6 +102,8 @@ class StateMonitor:
     __pv_connected = {}
     __rf_on = {}
     __hv_bad = {}
+    __jt_high = {}
+    __threshold_exceeded = {}
 
     @classmethod
     def clear_state(cls):
@@ -99,8 +122,10 @@ class StateMonitor:
         msg = f"""__disconnected_pvs: {cls.__get_disconnected_pv_count()}
 __rf_off_cav_count: {cls.__get_rf_off_count()}
 __hv_bad_count: {cls.__get_hv_bad_count()}
+__threshold_exceeded_count: {cls.__get_threshold_exceeded_count()}
 __pv_connected: {ascii(cls.__pv_connected)}
-__rf_on: {ascii(cls.__rf_on)}"""
+__rf_on: {ascii(cls.__rf_on)}
+__threshold_exceeded: {ascii(cls.__threshold_exceeded)}"""
         return msg
 
     @classmethod
@@ -120,6 +145,18 @@ __rf_on: {ascii(cls.__rf_on)}"""
         with cls.__state_lock:
             out = cls.__get_rf_off_count()
         return out
+
+    @classmethod
+    def threshold_exceeded(cls, pvname: str, threshold: float, value: float, kind: str) -> None:
+        """Track when a PV's threshold has been exceeded."""
+        with cls.__state_lock:
+            cls.__threshold_exceeded[pvname] = (threshold, value, kind)
+
+    @classmethod
+    def threshold_recovered(cls, pvname: str, threshold: float, value: float, kind: str) -> None:
+        """Track when a PV's threshold has been exceeded."""
+        with cls.__state_lock:
+            del cls.__threshold_exceeded[pvname]
 
     @classmethod
     def pv_disconnected(cls, pvname) -> None:
@@ -170,6 +207,10 @@ __rf_on: {ascii(cls.__rf_on)}"""
         return count
 
     @classmethod
+    def __get_threshold_exceeded_count(cls):
+        return len(cls.__threshold_exceeded.keys())
+
+    @classmethod
     def rf_turned_off(cls, pvname) -> None:
         """Increment the RF off counter."""
         with cls.__state_lock:
@@ -190,7 +231,8 @@ __rf_on: {ascii(cls.__rf_on)}"""
     @classmethod
     def __daq_good(cls) -> bool:
         """Is DAQ good to proceed.  True if we should take data, false if not."""
-        if cls.__get_rf_off_count() == 0 and cls.__get_disconnected_pv_count() == 0:
+        if cls.__get_rf_off_count() == 0 and cls.__get_disconnected_pv_count() == 0 and cls.__get_hv_bad_count() == 0\
+                and cls.__get_threshold_exceeded_count() == 0:
             return True
         else:
             return False
@@ -231,6 +273,8 @@ __rf_on: {ascii(cls.__rf_on)}"""
                 if not cls.__daq_good():
                     n_dps = cls.__get_disconnected_pv_count()
                     n_no_rf = cls.__get_rf_off_count()
+                    n_hv = cls.__get_hv_bad_count()
+                    n_threshold = cls.__get_threshold_exceeded_count()
                     if n_dps > 0:
                         pvs = ""
                         count = 0
@@ -253,6 +297,28 @@ __rf_on: {ascii(cls.__rf_on)}"""
                                 count += 1
                                 pvs += f"{pv_name} has RF off\n"
                         raise RuntimeError(f"StateMonitor detected {n_no_rf} cavities without RF on")
+                    elif n_hv > 0:
+                        pvs = ""
+                        count = 0
+                        for pv_name in sorted(cls.__hv_bad.keys()):
+                            if count >= 3:
+                                pvs += "...\n"
+                                break
+                            if cls.__hv_bad[pv_name]:
+                                count += 1
+                                pvs += f"{pv_name}: Bad high voltage.\n"
+                        raise RuntimeError(f"StateMonitor detected {n_hv} NDX with bad HV.")
+                    elif n_threshold > 0:
+                        pvs = ""
+                        count = 0
+                        for pv_name in sorted(cls.__threshold_exceeded.keys()):
+                            if count >= 3:
+                                pvs += "...\n"
+                                break
+                            count += 1
+                            (threshold, value, kind) = cls.__threshold_exceeded[pv_name]
+                            pvs += f"{pv_name}: {value} {kind} {threshold} (threshold).\n"
+                        raise RuntimeError(f"StateMonitor detected {n_threshold} PVs exceeding threshold.")
                     else:
                         raise RuntimeError(f"StateMonitor detected something wrong.\n{cls.__output_state()}")
             except Exception as ex:
