@@ -77,7 +77,9 @@ class TestCavity(TestCase):
         self.assertEqual(pre_walk_gset, post_walk_gset,
                          "walk_gradient tried to change GSET with request higher than ODVH")
 
-        start = cav.gset.value
+        cav.gset.put(cav.gset_min + 3, wait=True)
+        time.sleep(0.01)
+        start = cav.gset_min + 3
         exp = [start - 1, start - 2, start - 2.5]
         cav.gset.add_callback(track_values_cb)
         cav.walk_gradient(gset=cav.gset.value-2.5, settle_time=0.01, wait_for_ramp=False)
