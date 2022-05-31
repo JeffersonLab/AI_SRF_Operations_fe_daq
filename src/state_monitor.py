@@ -344,5 +344,5 @@ __threshold_exceeded: {ascii(cls.__threshold_exceeded)}"""
                         logger.info("Exiting after error based on user response.")
                         raise RuntimeError("User indicated unrecoverable error.")
                 else:
-                    logger.info("No user interaction requested on state check.")
+                    logger.info("No user interaction requested on check_state exception.")
                     raise ex
