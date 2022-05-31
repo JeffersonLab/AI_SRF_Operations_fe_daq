@@ -113,7 +113,6 @@ class StateMonitor:
     __pv_connected = {}
     __rf_on = {}
     __hv_bad = {}
-    __jt_high = {}
     __threshold_exceeded = {}
 
     @classmethod
@@ -333,7 +332,7 @@ __threshold_exceeded: {ascii(cls.__threshold_exceeded)}"""
                             count += 1
                             (threshold, value, kind) = cls.__threshold_exceeded[pv_name]
                             pvs += f"{pv_name}: {value} {kind} {threshold} (threshold).\n"
-                        raise RuntimeError(f"StateMonitor detected {n_threshold} PVs exceeding threshold.")
+                        raise RuntimeError(f"StateMonitor detected {n_threshold} PVs exceeding threshold.\n{pvs}")
                     else:
                         raise RuntimeError(f"StateMonitor detected something wrong.\n{cls.__output_state()}")
             except Exception as ex:
