@@ -338,9 +338,11 @@ __threshold_exceeded: {ascii(cls.__threshold_exceeded)}"""
             except Exception as ex:
                 msg = f"StateMonitor found error.\n{ex}"
                 logger.error(msg)
-                response = 'n'
                 if user_input:
                     response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
-                if not response.startswith('y'):
-                    logger.info("Exiting after error based on user response.")
-                    raise RuntimeError("User indicated unrecoverable error.")
+                    if not response.startswith('y'):
+                        logger.info("Exiting after error based on user response.")
+                        raise RuntimeError("User indicated unrecoverable error.")
+                else:
+                    logger.info("No user interaction requested on state check.")
+                    raise ex
