@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class Cavity:
+    # Importing Zone would result in circular imports
+    # noinspection PyUnresolvedReferences
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
                  bypassed: bool, zone: 'Zone', gset_no_fe: float = None, gset_fe_onset: float = None,
                  gset_max: float = None):
@@ -174,7 +176,8 @@ class Cavity:
         if gset != 0 and self.bypassed_eff:
             msg = f"{self.name}: Can't turn on bypassed cavity"
             logger.error(msg)
-            logger.error(f"gset_init={self.gset_init}, self.bypassed={self.bypassed}, self.bypassed_eff={self.bypassed_eff}, self.gset={self.gset.value}")
+            logger.error(f"gset_init={self.gset_init}, self.bypassed={self.bypassed}, "
+                         f"self.bypassed_eff={self.bypassed_eff}, self.gset={self.gset.value}")
             raise ValueError(msg)
         if gset != 0 and gset < self.gset_min:
             msg = f"{self.name}: Can't turn cavity below operational min"
@@ -221,7 +224,8 @@ class Cavity:
                     if (datetime.now() - start_ramp).total_seconds() > ramp_timeout:
                         logger.warning(f"{self.name} is taking a long time to ramp.")
                         response = input(
-                            f"Waited {ramp_timeout} seconds for {self.name} to ramp.  Continue? (n|y): ").lstrip().lower()
+                            f"Waited {ramp_timeout} seconds for {self.name} to ramp.  Continue? (n|y): "
+                        ).lstrip().lower()
                         if not response.startswith("y"):
                             msg = f"User requested exit while waiting on {self.name} to ramp."
                             logger.error(msg)
