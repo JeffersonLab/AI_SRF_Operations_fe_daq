@@ -1,12 +1,12 @@
 # Linac Pressure at the North Linac "T"
 record(ai, "adamc:CPI4107B") {
-    field(VAL, 0.385)
+    field(VAL, 0.0385)
     field(PINI, "YES")
 }
 
 # Linac Pressure at the North Linac "T"
 record(ai, "adamc:CPI5107B") {
-    field(VAL, 0.385)
+    field(VAL, 0.0385)
     field(PINI, "YES")
 }
 
@@ -17,7 +17,7 @@ record(ai, "adamc:CAPHTRMGN") {
 }
 
 # South Linac heater margin
-record(ai, "adamc:CAPHTRMGN2") {
+record(ai, "adamc:CAPHTR2MGN") {
     field(VAL, 2)
     field(PINI, "YES")
 }
