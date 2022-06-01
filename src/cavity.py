@@ -1,6 +1,5 @@
 import math
 from datetime import datetime
-from typing import Union
 
 import epics
 import logging
@@ -106,6 +105,8 @@ class Cavity:
                 # For C75, the "is ramping" field is the 15th bit counting from zero.  If it's zero, then we're not
                 # ramping.  Otherwise, we're ramping.  (Per K. Hesse)
                 is_ramping = int(self.stat1.value) & 0x8000 > 0
+            else:
+                raise RuntimeError(f"Unsupported controls type '{self.controls_type}'")
 
         return is_ramping
 
