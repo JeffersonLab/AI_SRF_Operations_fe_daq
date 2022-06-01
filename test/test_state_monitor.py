@@ -1,4 +1,5 @@
 import logging
+from typing import Tuple
 from unittest import TestCase
 import concurrent.futures
 import time
@@ -12,18 +13,32 @@ from linac import Zone, Linac
 from state_monitor import StateMonitor
 
 logger = logging.getLogger()
-logger.setLevel(logging.ERROR)
 prefix = "adamc:"
 jt_suffix = ""
 
+
 def reinit_all():
-    # "Restart" EPICS.
-    epics.ca.destroy_context()
-    time.sleep(0.1)
-    epics.ca.create_context()
+    old_level = logger.level
+    logger.setLevel(logging.CRITICAL)
+    # "Restart" EPICS CA.
+    epics.ca.clear_cache()
 
     # Clear out the state of previous PVs
     StateMonitor.clear_state()
+    logger.setLevel(old_level)
+
+
+def create_linac_zone_cav() -> Tuple[Linac, Zone, Cavity]:
+    # Create a cavity with supporting structure
+    linac = Linac(name="NorthLinac", prefix=prefix)
+    z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
+    logger.warning("Creating R1M1 cavity")
+    cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
+                 zone=z_1L22)
+    logger.warning("Initializing R1M1 cavity")
+    cav.wait_for_connections()
+
+    return linac, z_1L22, cav
 
 
 def flapping_pv(n=3, max_sleep=0.001):
@@ -42,7 +57,9 @@ def flapping_rf(n=3, max_sleep=0.001):
 
 class TestStateMonitor(TestCase):
     def test_daq_good(self):
-        StateMonitor.clear_state()
+        # Clear out previous state
+        reinit_all()
+
         self.assertTrue(StateMonitor.daq_good())
         ns = [10] * 1000
         with concurrent.futures.ThreadPoolExecutor() as executor:
@@ -62,13 +79,7 @@ class TestStateMonitor(TestCase):
         self.assertTrue(StateMonitor.daq_good(), StateMonitor.output_state())
 
         # Create a cavity with supporting structure
-        linac = Linac(name="NorthLinac")
-        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
-        logger.warning("Creating R1M1 cavity")
-        cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
-                     zone=z_1L22)
-        logger.warning("Initializing R1M1 cavity")
-        cav.wait_for_connections()
+        linac, zone, cav = create_linac_zone_cav()
 
         # The test IOC start with RF off.  Verify daq_good == False, Turn rf on, Verify daq_good == Good
         self.assertTrue(StateMonitor.daq_good(), StateMonitor.output_state())
@@ -88,13 +99,7 @@ class TestStateMonitor(TestCase):
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac = Linac(name="NorthLinac")
-        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
-        logger.warning("Creating R1M1 cavity")
-        cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
-                     zone=z_1L22)
-        logger.warning("Initializing R1M1 cavity")
-        cav.wait_for_connections()
+        linac, zone, cav = create_linac_zone_cav()
 
         cav.rf_on.put(1, wait=True)
         time.sleep(0.01)
@@ -108,41 +113,38 @@ class TestStateMonitor(TestCase):
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac = Linac(name="NorthLinac")
-        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
-        logger.warning("Creating R1M1 cavity")
-        cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
-                     zone=z_1L22)
-        logger.warning("Initializing R1M1 cavity")
-        cav.wait_for_connections()
+        linac, zone, cav = create_linac_zone_cav()
 
         cav.rf_on.put(0, wait=True)
         time.sleep(0.01)
         with self.assertRaises(Exception) as context:
             StateMonitor.monitor(duration=0, user_input=False)
+        cav.rf_on.put(1, wait=True)
 
         # Check that the StateMonitor sees bad HV
         ndxe = NDXElectrometer(name="NDX1L05", epics_name="adamc:NDX1L05")
+        old_value = ndxe.hv_read_back.get(use_monitor=False)
         ndxe.hv_read_back.put(0, wait=True)
         time.sleep(0.01)
         with self.assertRaises(Exception) as context:
             StateMonitor.monitor(duration=0, user_input=False)
-        ndxe.hv_read_back.put(975, wait=True)
+        ndxe.hv_read_back.put(old_value, wait=True)
 
     def test_jt_valve_monitoring(self):
         # Clear out previous state
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac = Linac(name="NorthLinac", prefix=prefix)
-        z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
-        old_value = z_1L22.jt_stroke.value
-        z_1L22.jt_stroke.put(95, wait=True)
+        linac, zone, cav = create_linac_zone_cav()
+        old_value = zone.jt_stroke.get(use_monitor=False)
+        zone.jt_stroke.put(95, wait=True)
 
+        time.sleep(0.05)
         with self.assertRaises(Exception) as context:
             StateMonitor.check_state(user_input=False)
-        z_1L22.jt_stroke.put(old_value, wait=True)
-
+        time.sleep(0.05)
+        zone.jt_stroke.put(old_value, wait=True)
+        time.sleep(0.05)
         StateMonitor.check_state(user_input=False)
 
     def test_linac_pressure_monitoring(self):
