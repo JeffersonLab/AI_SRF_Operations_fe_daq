@@ -14,6 +14,7 @@ has_connected_lock = threading.Lock()
 first_rf_on = []
 first_rf_on_lock = threading.Lock()
 
+
 def connection_cb(pvname: str = None, conn: bool = None, **kwargs) -> None:
     """This is a generic connection callback that pauses application operation when a disconnect occurs.
 
@@ -56,7 +57,9 @@ def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) 
         if low >= high:
             raise ValueError("Low must be less than high thresholds")
 
-    def threshold_cb(pvname: str, value: float, ** kwargs) -> None:
+    def threshold_cb(pvname: str, value: float, **kwargs) -> None:
+        # Note low, high are nonlocal, but do not get modified
+        nonlocal low, high
         is_low = False
         is_high = False
         if low is not None:
@@ -75,7 +78,6 @@ def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) 
         elif is_high:
             StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=high, kind='>')
             logger.error(f"{pvname} is above threshold ({value} > {high})")
-
 
     return threshold_cb
 
