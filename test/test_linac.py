@@ -141,37 +141,6 @@ class TestLinac(TestCase):
         self.assertTrue(cavity.name in linac.cavities.keys())
         self.assertTrue(cavity.name in linac.zones['1L11'].cavities.keys())
 
-    # This test was used when I had the set_gradients method for a linac.  That method was removed to ensure I didn't
-    # accidentally try to update a whole linac at once.  That could crash cryo.
-    # def test_set_gradients(self):
-    #     lf = LinacFactory(testing=True)
-    #
-    #     # Check that the segmask filtering works
-    #     linac = Linac("NorthLinac")
-    #     lf._setup_zones(linac)
-    #     lf._setup_cavities(linac)
-    #
-    #     z_1L22 = linac.zones['1L22']
-    #     z_1L23 = linac.zones['1L23']
-    #
-    #     # Set everything to min gset.  Check that it worked
-    #     linac.set_gradients(level="low")
-    #     self.assertEqual(5.0, z_1L22.cavities['1L22-1'].gset.get(use_monitor=False))
-    #
-    #     # Set everything but 1L23 to high.
-    #     linac.set_gradients(exclude_zones=[z_1L23], level="high")
-    #
-    #     # auto_monitor is not reliable when recently doing puts
-    #     result = z_1L22.cavities['1L22-1'].gset.get(use_monitor=False)
-    #     odvh = z_1L22.cavities['1L22-1'].odvh.value
-    #
-    #     # Did 1L22-1 get set within 1 of odvh?
-    #     self.assertTrue(odvh - 3 <= result <= odvh, f"ODVH:{odvh}, result:{result}")
-    #
-    #     # Did 1L23-1 get set to it's min (5.0) and not a "high" value
-    #     result = z_1L23.cavities['1L23-1'].gset.get(use_monitor=False)
-    #     self.assertEqual(5.0, result)
-
     def test_get_radiation_measurements(self):
         lf = LinacFactory(testing=True)
         linac = lf.create_linac("NorthLinac")
