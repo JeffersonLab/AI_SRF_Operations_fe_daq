@@ -46,7 +46,6 @@ def hv_read_back_cb(pvname: str, value: float, **kwargs) -> None:
         logger.error(f"{pvname} value is out of spec.  ({value} != 1000 +/- 15%).")
     else:
         StateMonitor.hv_good(pvname=pvname)
-        #logger.info(f"{pvname} is ok {value} (== 1000 +/- 10%).")
 
 
 def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) -> callable:
