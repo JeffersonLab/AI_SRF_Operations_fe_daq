@@ -41,31 +41,38 @@ def create_linac_zone_cav() -> Tuple[Linac, Zone, Cavity]:
     return linac, z_1L22, cav
 
 
-def flapping_pv(n=3, max_sleep=0.001):
+def flapping_pv(pvname, n=3, max_sleep=0.001):
     for i in range(n):
         time.sleep(np.random.uniform(0, max_sleep))
-        StateMonitor.pv_disconnected()
-        StateMonitor.pv_reconnected()
+        StateMonitor.pv_disconnected(pvname=pvname)
+        StateMonitor.pv_reconnected(pvname=pvname)
 
 
-def flapping_rf(n=3, max_sleep=0.001):
+def flapping_rf(pvname, n=3, max_sleep=0.001):
     for i in range(n):
         time.sleep(np.random.uniform(0, max_sleep))
-        StateMonitor.rf_turned_off()
-        StateMonitor.rf_turned_on()
+        StateMonitor.rf_turned_off(pvname=pvname)
+        StateMonitor.rf_turned_on(pvname=pvname)
 
 
 class TestStateMonitor(TestCase):
     def test_daq_good(self):
+        """Test that any resolved problems do not stick with the state monitor."""
         # Clear out previous state
         reinit_all()
 
+        linac, zone, cav = create_linac_zone_cav()
         self.assertTrue(StateMonitor.daq_good())
-        ns = [10] * 1000
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            executor.map(flapping_pv, ns)
-            executor.map(flapping_rf, ns)
 
+        # This should run for 0.1 seconds
+        n = 100
+        args = zip([cav.rf_on.pvname] * n,  [10] * n)
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            executor.map(flapping_pv, args)
+            executor.map(flapping_rf, args)
+
+        # Sleep long enough for all of the flapping to have stopped.
+        time.sleep(n * 0.001 * 1.5)
         self.assertTrue(StateMonitor.daq_good())
 
     def test_daq_good_with_cavities(self):
