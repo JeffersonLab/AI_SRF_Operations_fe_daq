@@ -56,6 +56,20 @@ class TestCavity(TestCase):
                 max_val = tmp
         self.assertTrue(delta > max_val, f"Jiggled too much.  Observed max jiggle {max_val} (>{delta})")
 
+    def test_calculate_heat(self):
+        cav = get_cavity()
+
+        # Test that the answer is expected when we supply the gradient
+        exp = 10 * 10 * 1e12 * 0.7 / (1241.3 * 6e9)
+        result = cav.calculate_heat(gradient=10)
+        self.assertAlmostEqual(exp, result, 2)
+
+        # Test that the answer is as expected when it uses the default value (the current gset).
+        g = cav.gset.value
+        exp = g * g * 1e12 * 0.7 / (1241.3 * 6e9)
+        result = cav.calculate_heat()
+        self.assertAlmostEqual(exp, result, 2)
+
     def test_walk_gradient(self):
 
         values_lock = threading.Lock()

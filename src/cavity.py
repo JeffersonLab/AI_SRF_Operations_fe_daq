@@ -1,5 +1,6 @@
 import math
 from datetime import datetime
+from typing import Optional
 
 import epics
 import logging
@@ -63,6 +64,13 @@ class Cavity:
             self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
             self.gset_min = 5
 
+        if self.cavity_type == "C100":
+            self.shunt_impedance = 1241.3
+        elif self.cavity_type == "C75":
+            self.shunt_impedance = 1049
+        else:
+            self.shunt_impedance = 960
+
         # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
         if not self.bypassed:
             self.rf_on.add_callback(rf_on_cb)
@@ -123,6 +131,14 @@ class Cavity:
     def get_low_gset(self):
         """Return the appropriate lowest no FE gradient.  Either the lowest stable or the highest known without FE."""
         return self.gset_min if self.gset_no_fe is None else self.gset_no_fe
+
+    def calculate_heat(self, gradient: Optional[float] = None) -> float:
+        g = gradient
+        if g is None:
+            g = self.gset.value
+
+        # gradient is is units of MV/m. formula expects V/m, so 1e12
+        return (g * g * self.length * 1e12) / (self.shunt_impedance * self.Q0)
 
     def walk_gradient(self, gset: float, step_size: float = 1, **kwargs) -> None:
         """Move the gradient of the cavity to gset in steps.
