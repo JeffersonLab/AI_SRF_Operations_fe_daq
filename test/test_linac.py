@@ -144,7 +144,8 @@ class TestLinac(TestCase):
         linac = Linac("NorthLinac", prefix="adamc:")
         zone = Zone(name='1L11', linac=linac, controls_type='1.0')
         linac.zones[zone.name] = zone
-        cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone)
+        cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
+                        Q0=6e9)
 
         # Test that the cavity is missing
         self.assertFalse(cavity.name in linac.cavities.keys())
@@ -207,7 +208,7 @@ class TestZone(TestCase):
         linac = Linac("NorthLinac", prefix="adamc:")
         zone = Zone(name='1L11', linac=linac, controls_type='1.0')
         linac.zones[zone.name] = zone
-        cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone)
+        cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone, Q0=6e9)
 
         # Test that the cavity is missing
         self.assertFalse(cavity.name in linac.cavities.keys())
