@@ -114,6 +114,12 @@ class TestCavity(TestCase):
             cav.set_gradient(6, wait_for_ramp=False)
         cav.bypassed_eff = False
 
+        old_max = cav.gset_max
+        cav.gset_max = 7
+        with self.assertRaises(Exception) as context:
+            cav.set_gradient(8, wait_for_ramp=False)
+        cav.gset_max = old_max
+
     def test_set_gradient_ramping(self):
         cav = get_cavity()
 
