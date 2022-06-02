@@ -84,6 +84,9 @@ class Cavity:
         elif gset_max > self.drvh.value:
             logger.warning(
                 f"{self.name}: Tried to set gset_max > GSET.DRVH.  Set gset_max = GSET.DRVH ({self.drvh.value})")
+            self.gset_max = self.drvh.value
+        else:
+            self.gset_max = gset_max
 
     def is_rf_on(self):
         """A simple method to determine if RF is on in a cavity"""
