@@ -255,7 +255,7 @@ class LinacFactory:
     def _setup_cavities(self, linac: Linac, no_fe_file="./cfg/no_fe.tsv", fe_onset_file="./cfg/fe_onset.tsv") -> None:
         """Creates cavities from CED data and adds to linac and zone.  Expects _setup_zones to have been run."""
         ced_params = 't=CryoCavity&p=EPICSName&p=CavityType&p=MaxGSET&p=OpsGsetMax&p=Bypassed&p=Length&p=Housed_by' \
-                     '&out=json'
+                     '&p=Q0&out=json'
         ced_url = f"http://{self.ced_server}/inventory?ced={self.ced_instance}&workspace={self.ced_workspace}" \
                   f"&{ced_params}"
         cavity_elements = self._get_ced_elements(ced_url=ced_url)
@@ -356,6 +356,7 @@ class LinacFactory:
             name = e['name']
             cavity_type = p['CavityType']
             epics_name = p['EPICSName']
+            Q0 = p['Q0']
             if prefix is not None:
                 epics_name = f"{prefix}{epics_name}"
             zone = p['Housed_by']
@@ -378,7 +379,7 @@ class LinacFactory:
             # Only add cavities that are in zones in this Linac
             if zone in linac.zones.keys():
                 cavity = Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                                bypassed=bypassed, zone=linac.zones[zone], gset_no_fe=gset_no_fe,
+                                bypassed=bypassed, Q0=Q0, zone=linac.zones[zone], gset_no_fe=gset_no_fe,
                                 gset_fe_onset=gset_fe_onset, gset_max=gset_max)
                 linac.add_cavity(cavity)
 

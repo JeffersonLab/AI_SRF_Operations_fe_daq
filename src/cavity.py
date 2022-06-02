@@ -14,7 +14,7 @@ class Cavity:
     # Importing Zone would result in circular imports
     # noinspection PyUnresolvedReferences
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
-                 bypassed: bool, zone: 'Zone', gset_no_fe: float = None, gset_fe_onset: float = None,
+                 bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
                  gset_max: float = None):
         self.name = name
         self.epics_name = epics_name
@@ -24,6 +24,7 @@ class Cavity:
         self.length = length
         self.bypassed = bypassed
         self.zone = zone
+        self.Q0 = Q0
 
         # This is a higher gradient where we have found no field emission.  Typically it is the highest integer MV/m
         # that does not produce a radiation signal. Useful as a baseline "high" gradient with some wiggle room from FE.

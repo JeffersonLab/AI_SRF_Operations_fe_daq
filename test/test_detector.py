@@ -15,7 +15,8 @@ logger = logging.getLogger()
 def get_cavity():
     linac = Linac("TestLinac")
     zone = Zone(name="1L22", linac=linac)
-    cav = Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False, zone=zone)
+    cav = Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False, zone=zone,
+                 Q0=6e9)
     return cav
 
 

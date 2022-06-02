@@ -34,7 +34,7 @@ def create_linac_zone_cav() -> Tuple[Linac, Zone, Cavity]:
     z_1L22 = Zone(name='1L22', linac=linac, controls_type='2.0', prefix=prefix, jt_suffix=jt_suffix)
     logger.warning("Creating R1M1 cavity")
     cav = Cavity(name='1L22-1', epics_name='adamc:R1M1', cavity_type='C100', length=0.7, bypassed=False,
-                 zone=z_1L22)
+                 zone=z_1L22, Q0=6e9)
     logger.warning("Initializing R1M1 cavity")
     cav.wait_for_connections()
 
