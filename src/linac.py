@@ -7,6 +7,7 @@ import requests
 import epics
 
 from cavity import Cavity
+from app_config import Config
 from detector import NDXDetector, NDXElectrometer
 from network import SSLContextAdapter
 from state_monitor import StateMonitor, connection_cb, get_threshold_cb
@@ -361,6 +362,11 @@ class LinacFactory:
             length = float(p['Length'])
             bypassed = True if 'Bypassed' in p.keys() else False
 
+            # Pull a new GSET limit from config file.
+            gset_max = None
+            if 'gset_max' in Config.config and p['EPICSName'] in Config.config['gset_max']:
+                gset_max = Config.config['gset_max'][p['EPICSName']]
+
             gset_no_fe = None
             if no_fe_gsets is not None and epics_name in no_fe_gsets.keys():
                 gset_no_fe = no_fe_gsets[epics_name]
@@ -373,7 +379,7 @@ class LinacFactory:
             if zone in linac.zones.keys():
                 cavity = Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
                                 bypassed=bypassed, zone=linac.zones[zone], gset_no_fe=gset_no_fe,
-                                gset_fe_onset=gset_fe_onset)
+                                gset_fe_onset=gset_fe_onset, gset_max=gset_max)
                 linac.add_cavity(cavity)
 
         # Here we check that all cavity PVs are able to connect and run any initialization that happens after
