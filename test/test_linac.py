@@ -5,7 +5,9 @@ import logging
 import numpy as np
 import epics
 
+from app_config import Config
 from cavity import Cavity
+# from config import Config
 from linac import LinacFactory, Linac, Zone
 
 # logging.basicConfig(level=logging.DEBUG)
@@ -86,6 +88,9 @@ class TestLinacFactory(TestCase):
         self.assertTrue("2L10" not in linac.zones.keys())
 
     def test__setup_cavities(self):
+        # Add some gset_max limits via config
+        Config.config['gset_max'] = {'R1M1': 6, 'R1M2': 500}
+
         lf = LinacFactory(testing=True)
 
         # Check that the segmask filtering works
@@ -93,9 +98,18 @@ class TestLinacFactory(TestCase):
         lf._setup_zones(linac)
         lf._setup_cavities(linac)
 
+        Config.clear_config()
+
         self.assertEqual(linac.zones['1L19'].cavities['1L19-1'].name, '1L19-1')
         self.assertEqual(linac.cavities['1L19-1'].name, '1L19-1')
         self.assertTrue("2L10-1" not in linac.cavities.keys())
+
+        # Test that the config is being read, applied, and sanity checked
+        # R1M1 GSET.DRVH should be higher than 6, so this value should stick
+        # R1M2GSET.DRVH must be less than 25, so 500 should not be applied.
+        self.assertEqual(linac.cavities['1L22-1'].gset_max, 6)
+        self.assertNotEqual(linac.cavities['1L22-2'].gset_max, 500, "GSET.DRVH is not being used to set gset_max")
+        self.assertTrue(linac.cavities['1L22-2'].gset_max <= 25)
 
     def test__setup_zones(self):
         lf = LinacFactory(testing=True)
