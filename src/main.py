@@ -7,11 +7,10 @@ import signal
 from datetime import datetime
 
 from linac import LinacFactory
+from app_config import Config
 
 import procedures
 
-# The root directory of the app
-app_root = os.path.realpath(os.path.join(os.path.basename(__file__), ".."))
 
 
 def sigint_handler(sig, frame):
@@ -101,6 +100,11 @@ def main() -> int:
 
     try:
         args = parser.parse_args()
+
+        config_file = Config.app_root + "/fe_daq.cfg"
+        if os.path.isfile(config_file):
+            Config.parse_config_file(config_file)
+
         linac_name = args.linac
         testing = args.testing
 
@@ -108,7 +112,7 @@ def main() -> int:
         dir_name = f"run-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}"
         if testing:
             dir_name = f"run-testing-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}"
-        log_dir = os.path.join(app_root, "log", dir_name)
+        log_dir = os.path.join(Config.app_root, "log", dir_name)
         init_logging(log_dir=log_dir, run_log="fe_daq.log")
         logger = logging.getLogger(__name__)
 
