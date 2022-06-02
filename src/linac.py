@@ -162,14 +162,18 @@ class Zone:
         if cavity.name not in self.cavities.keys():
             self.cavities[cavity.name] = cavity
 
-    def check_percent_heat_change(self, gradients: List[Optional[float]], percentage: float = 10.0):
-        """Raises exception if the supplied new gradients will cause too large a percent change in cryomodule heat."""
+    def check_percent_heat_change(self, gradients: List[Optional[float]], percentage: float = 10.0) \
+            -> Tuple[float, float, float]:
+        """Raises exception if the supplied new gradients will cause too large a percent change in cryomodule heat.
+
+        Returns the percent change, the new heat and the old heat as a tuple.
+        """
         if len(gradients) != 8:
             raise ValueError("Must supply eight gradients.  Use None for no change.")
         old_heat = 0
         new_heat = 0
         for idx, gradient in enumerate(gradients):
-            cav = self.cavities[f"{self.name}-{idx+1}"]
+            cav = self.cavities[f"{self.name}-{idx + 1}"]
             old_heat += cav.calculate_heat()
             if gradient is not None:
                 new_heat += cav.calculate_heat(gradient)
@@ -179,6 +183,8 @@ class Zone:
         rel_change = (new_heat - old_heat) / old_heat * 100
         if abs(rel_change) > percentage:
             raise RuntimeError(f"New gradients will raise heat in {self.name} by {round(rel_change, 1)}%")
+
+        return rel_change, new_heat, old_heat
 
     # def set_gradients(self, exclude_cavs: List[Cavity] = None, level: str = "low") -> None:
     #     """Set the cavity gradients high/low for cavities in the zone, optionally excluding some cavities
