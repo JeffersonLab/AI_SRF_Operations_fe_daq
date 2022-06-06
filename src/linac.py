@@ -343,7 +343,12 @@ class LinacFactory:
             # Only process electrometers that are requested (or all in nothing was specified
             if electrometer_names is None or name in electrometer_names:
                 logger.info(f"Adding {name} to {linac.name}'s electrometers")
-                ndxe = NDXElectrometer(name=name, epics_name=f"{self.pv_prefix}{name}")
+
+                target_hv = None
+                if 'ndx_hv' in Config.config and name in Config.config['ndx_hv']:
+                    target_hv = Config.config['ndx_hv'][name]
+
+                ndxe = NDXElectrometer(name=name, epics_name=f"{self.pv_prefix}{name}", target_hv=target_hv)
                 linac.ndx_electrometers[name] = ndxe
                 for d in p['Detectors'].values():
                     if len(d) > 0:
@@ -374,7 +379,7 @@ class LinacFactory:
 
     @staticmethod
     def _add_cavity_to_linac(elements, linac, prefix=None, no_fe_gsets=None, fe_onset_gsets=None):
-
+        logger.info("Creating cavities and adding them to linac")
         for e in elements:
             # Grab cavity properties
             p = e['properties']
@@ -382,7 +387,7 @@ class LinacFactory:
             cavity_type = p['CavityType']
             epics_name = p['EPICSName']
             Q0 = p['Q0']
-            if prefix is not None:
+            if prefix is not None or prefix != "":
                 epics_name = f"{prefix}{epics_name}"
             zone = p['Housed_by']
             length = float(p['Length'])

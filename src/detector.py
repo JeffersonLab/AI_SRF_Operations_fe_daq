@@ -1,32 +1,36 @@
 import copy
 import logging
-from typing import Tuple
+from typing import Tuple, Optional
 
 import epics
 from scipy.stats import ttest_ind
-from state_monitor import connection_cb, hv_read_back_cb
+from state_monitor import connection_cb, get_hv_read_back_cb
 
 logger = logging.getLogger(__name__)
 
 
 class NDXElectrometer:
 
-    def __init__(self, name: str, epics_name: str):
+    def __init__(self, name: str, epics_name: str, target_hv: Optional[float] = None):
         self.name = name
         self.epics_name = epics_name
+        if target_hv is None:
+            self.target_hv = 1000
+        else:
+            self.target_hv = target_hv
 
         self.capacitor_switch = epics.PV(f"{self.epics_name}_CAPACITOR_SW", connection_callback=connection_cb)
         self.daq_enabled = epics.PV(f"{self.epics_name}_RESET", connection_callback=connection_cb)
         self.integration_period = epics.PV(f"{self.epics_name}_PERIOD", connection_callback=connection_cb)
         self.hv_set_point = epics.PV(f"{self.epics_name}_HV_BIAS", connection_callback=connection_cb)
         self.hv_read_back = epics.PV(f"{self.epics_name}_HV_RBCK", connection_callback=connection_cb)
-        self.hv_read_back.add_callback(hv_read_back_cb)
+        self.hv_read_back.add_callback(get_hv_read_back_cb(self.target_hv, 0.15))
 
         # Do this check once at the start.  The rest of the time we monitor the read back in the StateMonitor to make
         # sure the actual value is close.
-        if self.hv_set_point.get(use_monitor=False) != 1000:
+        if self.hv_set_point.get(use_monitor=False) != self.target_hv:
             raise RuntimeError(
-                f"{self.name} HV set point {self.hv_set_point.pvname} = {self.hv_set_point.value} (!= 1000)")
+                f"{self.name} HV set point {self.hv_set_point.pvname} = {self.hv_set_point.value} (!= {target_hv})")
 
     def toggle_data_acquisition(self):
         # Toggle the DAQ off and back on.  There are some circumstances where it may be in "Acquire" mode according to
