@@ -9,6 +9,10 @@ dbLoadRecords("../db/ndx.db", "D1=INX1L22,D2=INX1L23,E=NDX1L22")
 dbLoadRecords("../db/ndx.db", "D1=INX1L24,D2=INX1L25,E=NDX1L24")
 dbLoadRecords("../db/ndx.db", "D1=INX1L26,D2=INX1L27,E=NDX1L26")
 dbLoadRecords("../db/ndx.db", "D1=INX1S01,D2=INX1S02,E=NDX1S01")
+dbLoadRecords("../db/ndx.db", "D1=INX2L22,D2=INX2L23,E=NDX2L22")
+dbLoadRecords("../db/ndx.db", "D1=INX2L24,D2=INX2L25,E=NDX2L24")
+dbLoadRecords("../db/ndx.db", "D1=INX2L26,D2=INX2L27,E=NDX2L26")
+dbLoadRecords("../db/ndx.db", "D1=INX2S01,D2=INX2S02,E=NDX2S01")
 
 # RF PVs
 dbLoadRecords("../db/rf-cavity.db", "A=121")

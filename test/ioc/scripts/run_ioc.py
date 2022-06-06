@@ -36,7 +36,12 @@ def rf_zone_to_ced_zone(zone):
         'R12': '1L02', 'R13': '1L03', 'R14': '1L04', 'R15': '1L05', 'R16': '1L06', 'R17': '1L07', 'R18': '1L08',
         'R19': '1L09', 'R1A': '1L10', 'R1B': '1L11', 'R1C': '1L12', 'R1D': '1L13', 'R1E': '1L14', 'R1F': '1L15',
         'R1G': '1L16', 'R1H': '1L17', 'R1I': '1L18', 'R1J': '1L19', 'R1K': '1L20', 'R1L': '1L21', 'R1M': '1L22',
-        'R1N': '1L23', 'R1O': '1L24', 'R1P': '1L25', 'R1Q': '1L26'
+        'R1N': '1L23', 'R1O': '1L24', 'R1P': '1L25', 'R1Q': '1L26',
+        'R22': '2L02', 'R23': '2L03', 'R24': '2L04', 'R25': '2L05', 'R26': '2L06', 'R27': '2L07', 'R28': '2L08',
+        'R29': '2L09', 'R2A': '2L10', 'R2B': '2L11', 'R2C': '2L12', 'R2D': '2L13', 'R2E': '2L14', 'R2F': '2L15',
+        'R2G': '2L16', 'R2H': '2L17', 'R2I': '2L18', 'R2J': '2L19', 'R2K': '2L20', 'R2L': '2L21', 'R2M': '2L22',
+        'R2N': '2L23', 'R2O': '2L24', 'R2P': '2L25', 'R2Q': '2L26'
+
     }
     return names[zone]
 
@@ -46,7 +51,12 @@ def ced_zone_to_rf_zone(zone):
         '1L02': 'R12', '1L03': 'R13', '1L04': 'R14', '1L05': 'R15', '1L06': 'R16', '1L07': 'R17', '1L08': 'R18',
         '1L09': 'R19', '1L10': 'R1A', '1L11': 'R1B', '1L12': 'R1C', '1L13': 'R1D', '1L14': 'R1E', '1L15': 'R1F',
         '1L16': 'R1G', '1L17': 'R1H', '1L18': 'R1I', '1L19': 'R1J', '1L20': 'R1K', '1L21': 'R1L', '1L22': 'R1M',
-        '1L23': 'R1N', '1L24': 'R1O', '1L25': 'R1P', '1L26': 'R1Q'
+        '1L23': 'R1N', '1L24': 'R1O', '1L25': 'R1P', '1L26': 'R1Q',
+        '2L02': 'R22', '2L03': 'R23', '2L04': 'R24', '2L05': 'R25', '2L06': 'R26', '2L07': 'R27', '2L08': 'R28',
+        '2L09': 'R29', '2L10': 'R2A', '2L11': 'R2B', '2L12': 'R2C', '2L13': 'R2D', '2L14': 'R2E', '2L15': 'R2F',
+        '2L16': 'R2G', '2L17': 'R2H', '2L18': 'R2I', '2L19': 'R2J', '2L20': 'R2K', '2L21': 'R2L', '2L22': 'R2M',
+        '2L23': 'R2N', '2L24': 'R2O', '2L25': 'R2P', '2L26': 'R2Q'
+
     }
     return names[zone]
 
@@ -81,12 +91,12 @@ def save_pid():
 
 def setup_ndx() -> None:
     for i in ['1L05', '1L06', '1L07', '1L08', '1L11', '1L21', '1L22', '1L23', '1L24', '1L25', '1L26', '1L27', '1S01',
-              '1S02']:
+              '1S02', '2L22', '2L23', '2L24', '2L25', '2L26', '2L27', '2S01', '2S02']:
         pv_name = f"{prefix}INX{i}_nCur"
         PVs[pv_name] = PV(pv_name)
         pv_name = f"{prefix}INX{i}_gCur"
         PVs[pv_name] = PV(pv_name)
-    for i in ['1L05', '1L07', '1L11', '1L21', '1L23', '1L25', '1L27']:
+    for i in ['1L05', '1L07', '1L11', '1L21', '1L23', '1L25', '1L27', '2L21', '2L23', '2L25', '2L27']:
         pv_name = f"{prefix}NDX{i}_CAPACITOR_SW"
         PVs[pv_name] = PV(pv_name)
         pv_name = f"{prefix}NDX{i}_PERIOD"
@@ -107,8 +117,6 @@ def setup_cavities() -> None:
 
         # We only want to focus on the NL
         if elem['name'].startswith("0L"):
-            continue
-        if elem['name'].startswith("2L"):
             continue
 
         bypassed = False
@@ -248,10 +256,11 @@ class JTValve:
 
 def setup_jt_valves():
     global JT_valves
-    for zone in ['1L02', '1L03', '1L04', '1L05', '1L06', '1L07', '1L08', '1L09',
-                 '1L10', '1L11', '1L12', '1L13', '1L14', '1L15', '1L16', '1L17', '1L18', '1L19',
-                 '1L20', '1L21', '1L22', '1L23', '1L24', '1L25', '1L26']:
-        JT_valves[zone] = JTValve(zone=zone)
+    for linac in ['1L', '2L']:
+        for zone in ['02', '03', '04', '05', '06', '07', '08', '09',
+                     '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
+                     '20', '21', '22', '23', '24', '25', '26']:
+            JT_valves[zone] = JTValve(zone=zone)
 
 
 if __name__ == "__main__":
@@ -260,8 +269,8 @@ if __name__ == "__main__":
     setup_cavities()
     setup_jt_valves()
     count = 0
-    p_jt_high = 1e-5
-    #p_jt_high = 1
+    p_jt_high = 0
+    # p_jt_high = 1e-5
 
     while True:
         # Make this slow enough so my unit tests have a chance to make some changes without
@@ -283,5 +292,5 @@ if __name__ == "__main__":
             # 25 valves * 20 chances per second * 5 second duration * prob_trip_every_step,
             # implies that 1/10000 prob there will be 0.025 JT valves too high on average.  The math is not the exact
             # right formula, but good enough for testing without cracking open a book.
-            elif np.random.uniform(0, 1) > (1-p_jt_high):
+            elif np.random.uniform(0, 1) > (1 - p_jt_high):
                 jt.set_jt_high()
