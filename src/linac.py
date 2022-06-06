@@ -182,7 +182,8 @@ class Zone:
 
         rel_change = (new_heat - old_heat) / old_heat * 100
         if abs(rel_change) > percentage:
-            raise RuntimeError(f"New gradients will raise heat in {self.name} by {round(rel_change, 1)}%")
+            raise RuntimeError(f"{self.name}: Gradients will change heat too much. {old_heat}W -> {new_heat}W "
+                               f"({round(rel_change, 1)}%)")
 
         return rel_change, new_heat, old_heat
 
@@ -247,7 +248,11 @@ class LinacFactory:
         prefix = ""
         if self.testing:
             prefix = "adamc:"
-        linac = Linac(name, prefix="adamc:")
+            logger.info(f"Using PV prefix '{prefix}'")
+        else:
+            logger.info(f"Using no PV prefix.")
+
+        linac = Linac(name, prefix=prefix)
         self._setup_zones(linac=linac, zone_names=zone_names)
         self._setup_cavities(linac)
         self._setup_ndx(linac, electrometer_names=electrometer_names, detector_names=detector_names)
