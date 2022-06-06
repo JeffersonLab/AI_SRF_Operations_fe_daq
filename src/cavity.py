@@ -26,7 +26,7 @@ class Cavity:
         self.bypassed = bypassed
         self.zone = zone
         self.Q0 = Q0
-        self.cavity_number = name[5:6]
+        self.cavity_number = int(name[5:6])
 
         # This is a higher gradient where we have found no field emission.  Typically it is the highest integer MV/m
         # that does not produce a radiation signal. Useful as a baseline "high" gradient with some wiggle room from FE.
