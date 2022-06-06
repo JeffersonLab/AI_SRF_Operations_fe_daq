@@ -260,6 +260,7 @@ class LinacFactory:
 
     def _setup_zones(self, linac, zone_names: List[str] = None) -> None:
         """Queries CED for zone information.  Constructs zones and adds them to Linac."""
+        logging.info("Setting up zones from CED")
         ced_params = 't=Cryomodule&p=EPICSName&p=ModuleType&p=ControlsType&p=SegMask&out=json'
         ced_url = f"http://{self.ced_server}/inventory?ced={self.ced_instance}&workspace={self.ced_workspace}" \
                   f"&{ced_params}"
@@ -283,6 +284,7 @@ class LinacFactory:
 
     def _setup_cavities(self, linac: Linac, no_fe_file="./cfg/no_fe.tsv", fe_onset_file="./cfg/fe_onset.tsv") -> None:
         """Creates cavities from CED data and adds to linac and zone.  Expects _setup_zones to have been run."""
+        logging.info("Setting up cavities from CED")
         ced_params = 't=CryoCavity&p=EPICSName&p=CavityType&p=MaxGSET&p=OpsGsetMax&p=Bypassed&p=Length&p=Housed_by' \
                      '&p=Q0&out=json'
         ced_url = f"http://{self.ced_server}/inventory?ced={self.ced_instance}&workspace={self.ced_workspace}" \
@@ -327,6 +329,7 @@ class LinacFactory:
 
     def _setup_ndx(self, linac: Linac, electrometer_names: List[str], detector_names: List[str] = None) -> None:
         """Creates NDX related objects from CED and adds them to the supplied Linac."""
+        logging.info("Setting up NDX detectors from CED")
 
         # Grab the NDX Electrometers for the linac.  Then get the detectors that are associated with those.
         em_params = f"t=NDX_Electrometer&out=json&p=SegMask&p=Detectors"
