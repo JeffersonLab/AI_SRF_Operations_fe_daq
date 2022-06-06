@@ -570,81 +570,87 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
     linac.set_ndx_for_operations()
     logger.info(f"Starting gradient scan of {zone_names}")
 
-    for i in range(num_steps):
-        logger.info(f"Running iteration {i + 1} of {num_steps}")
-        with open(data_file, mode="a") as f:
-            f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
-            f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
+    try:
+        for i in range(num_steps):
+            logger.info(f"Running iteration {i + 1} of {num_steps}")
+            with open(data_file, mode="a") as f:
+                f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
+                f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
 
-            # Get the randomly ordered set of cavities to update
-            if len(allowable_cavities) == 0:
-                logger.info("All cavities have reached the max steps.  Stopping scan.")
-                return
-            cavities = list(allowable_cavities.values())
-            random.shuffle(cavities)
-            if n_cavities is not None:
-                n_cavities_ = min(len(cavities), n_cavities)
-                cavities = cavities[:n_cavities_]
-                logger.info(f"Cavities {[cavity.name for cavity in cavities]} chosen for this round of changes.")
+                # Get the randomly ordered set of cavities to update
+                if len(allowable_cavities) == 0:
+                    logger.info("All cavities have reached the max steps.  Stopping scan.")
+                    return
+                cavities = list(allowable_cavities.values())
+                random.shuffle(cavities)
+                if n_cavities is not None:
+                    n_cavities_ = min(len(cavities), n_cavities)
+                    cavities = cavities[:n_cavities_]
+                    logger.info(f"Cavities {[cavity.name for cavity in cavities]} chosen for this round of changes.")
 
-            # Got through and update the number of steps each cavity has taken.  Exclude cavity from allowable cavities
-            # if it is out of steps.
-            for cavity in cavities:
-                cavity_steps[cavity.name] += 1
-                logger.info(f"{cavity.name} is taking step {cavity_steps[cavity.name]}.")
-                if cavity_steps[cavity.name] >= max_cavity_steps:
-                    del allowable_cavities[cavity.name]
-                    logger.info(f"{cavity.name} is taking it's last allowable step ({max_cavity_steps}).")
+                # Got through and update the number of steps each cavity has taken.  Exclude cavity from allowable cavities
+                # if it is out of steps.
+                for cavity in cavities:
+                    cavity_steps[cavity.name] += 1
+                    logger.info(f"{cavity.name} is taking step {cavity_steps[cavity.name]}.")
+                    if cavity_steps[cavity.name] >= max_cavity_steps:
+                        del allowable_cavities[cavity.name]
+                        logger.info(f"{cavity.name} is taking it's last allowable step ({max_cavity_steps}).")
 
-            for cavity in cavities:
-                try:
-                    logger.info("Jiggling linac phases within +/- 5 degrees of initial")
-                    linac.jiggle_psets(5.0)
+                for cavity in cavities:
+                    try:
+                        logger.info("Jiggling linac phases within +/- 5 degrees of initial")
+                        linac.jiggle_psets(5.0)
 
-                    gset = cavity.gset.value
-                    new_gset = gset - step_size
-                    logger.info(f"Stepping down {cavity.name} from {gset} -> {new_gset}")
+                        gset = cavity.gset.value
+                        new_gset = gset - step_size
+                        logger.info(f"Stepping down {cavity.name} from {gset} -> {new_gset}")
 
-                    # Check that we're good prior to making any changes
-                    StateMonitor.check_state()
+                        # Check that we're good prior to making any changes
+                        StateMonitor.check_state()
 
-                    # Update gradient.  This should wait for gradient ramping and some time for cryo
-                    cavity.set_gradient(gset=new_gset, settle_time=settle_time)
+                        # Update gradient.  This should wait for gradient ramping and some time for cryo
+                        cavity.set_gradient(gset=new_gset, settle_time=settle_time)
 
-                    # We expect set_gradient to wait six seconds for cryo.  This is plenty of settle time for us.
-                    settle_end = datetime.now()
-                    settle_start = settle_end - timedelta(seconds=settle_time)
+                        # We expect set_gradient to wait six seconds for cryo.  This is plenty of settle time for us.
+                        settle_end = datetime.now()
+                        settle_start = settle_end - timedelta(seconds=settle_time)
 
-                    # If we're given a settle time, then sleep in small increments until that time is up.  Channel
-                    # Access should be running in a different thread, but documentation was hazy about if this was
-                    # needed.  This also checks the state of the control system and throws if there is a problem.
-                    # logger.info(f"Waiting on settle time ({settle_time} seconds)")
-                    # settle_start, settle_end = StateMonitor.monitor(duration=settle_time)
+                        # If we're given a settle time, then sleep in small increments until that time is up.  Channel
+                        # Access should be running in a different thread, but documentation was hazy about if this was
+                        # needed.  This also checks the state of the control system and throws if there is a problem.
+                        # logger.info(f"Waiting on settle time ({settle_time} seconds)")
+                        # settle_start, settle_end = StateMonitor.monitor(duration=settle_time)
 
-                    logger.info(f"Waiting on averaging time ({avg_time} seconds)")
-                    avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
+                        logger.info(f"Waiting on averaging time ({avg_time} seconds)")
+                        avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
 
-                    # Write out sample time to file
-                    fmt = "%Y-%m-%d %H:%M:%S.%f"
-                    settle_start_str = settle_start.strftime(fmt)
-                    settle_end_str = settle_end.strftime(fmt)
-                    avg_start_str = avg_start.strftime(fmt)
-                    avg_end_str = avg_end.strftime(fmt)
+                        # Write out sample time to file
+                        fmt = "%Y-%m-%d %H:%M:%S.%f"
+                        settle_start_str = settle_start.strftime(fmt)
+                        settle_end_str = settle_end.strftime(fmt)
+                        avg_start_str = avg_start.strftime(fmt)
+                        avg_end_str = avg_end.strftime(fmt)
 
-                    # Write out the timestamps for this sample
-                    logger.info("Writing to data log")
-                    f.write(
-                        f"{settle_start_str},{settle_end_str},{avg_start_str},{avg_end_str},{settle_time},"
-                        f"{avg_time},{cavity.name},{cavity.epics_name}\n")
-                    f.flush()
+                        # Write out the timestamps for this sample
+                        logger.info("Writing to data log")
+                        f.write(
+                            f"{settle_start_str},{settle_end_str},{avg_start_str},{avg_end_str},{settle_time},"
+                            f"{avg_time},{cavity.name},{cavity.epics_name}\n")
+                        f.flush()
 
-                except Exception as ex:
-                    msg = f"Exception occurred during gradient scan\n{ex}"
-                    logger.error(msg)
-                    response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
-                    if not response.startswith('y'):
-                        logger.info("Exiting after error based on user response.")
-                        raise ex
+                    except Exception as ex:
+                        msg = f"Exception occurred during gradient scan\n{ex}"
+                        logger.error(msg)
+                        response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
+                        if not response.startswith('y'):
+                            logger.info("Exiting after error based on user response.")
+                            raise ex
+
+    finally:
+        linac.restore_psets()
+
+    return
 
 #
 # Don't use these.  They will wreck the cryo system with all of the massive gyrations.
@@ -743,84 +749,90 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
     logger.info(f"Starting simple_gradient_scan")
 
     zone_names = list(linac.zones.keys())
+    logger.info("Setting NDX to operations settings")
+    linac.set_ndx_for_operations()
 
     with open(data_file, mode="a") as f:
-        write_data_index_header(f, type='simple_gradient_scan', active_zones=zone_names, step_size=step_size)
+        try:
+            write_data_index_header(f, type='simple_gradient_scan', active_zones=zone_names, step_size=step_size)
 
-        for cav_name in linac.cavities.keys():
-            cavity = linac.cavities[cav_name]
-            if cavity.bypassed_eff:
-                logger.info(f"{cavity.name} is effectively bypassed.  Skipping.")
-                logger.info(f"{cavity.name}: gset_init={cavity.gset_init}, self.bypassed={cavity.bypassed}, "
-                            f"self.bypassed_eff={cavity.bypassed_eff}, self.gset={cavity.gset.value}")
-                continue
-            gset_curr = cavity.gset.value
-            gset_max = cavity.gset_max
-            gset_min = cavity.gset_min
-            logger.info(f"Scanning {cavity.name}.  gset_curr={gset_curr}, gset_min={gset_min}, gset_max={gset_max}")
+            for cav_name in linac.cavities.keys():
+                cavity = linac.cavities[cav_name]
+                if cavity.bypassed_eff:
+                    logger.info(f"{cavity.name} is effectively bypassed.  Skipping.")
+                    logger.info(f"{cavity.name}: gset_init={cavity.gset_init}, self.bypassed={cavity.bypassed}, "
+                                f"self.bypassed_eff={cavity.bypassed_eff}, self.gset={cavity.gset.value}")
+                    continue
+                gset_curr = cavity.gset.value
+                gset_max = cavity.gset_max
+                gset_min = cavity.gset_min
+                logger.info(f"Scanning {cavity.name}.  gset_curr={gset_curr}, gset_min={gset_min}, gset_max={gset_max}")
 
-            # Figure out the applicable gradient steps for this cavity
-            gsets = []
-            for i in range(1, max_cavity_steps + 1):
-                gradient = gset_curr + (step_size * i)
-                if gradient >= gset_max:
-                    logger.info(f"{cavity.name}: Limited to +{gset_max - gset_curr} MV/m above initial.")
-                    gsets.append(gset_max)
-                    break
-                gsets.append(gradient)
+                # Figure out the applicable gradient steps for this cavity
+                gsets = []
+                for i in range(1, max_cavity_steps + 1):
+                    gradient = gset_curr + (step_size * i)
+                    if gradient >= gset_max:
+                        logger.info(f"{cavity.name}: Limited to +{gset_max - gset_curr} MV/m above initial.")
+                        gsets.append(gset_max)
+                        break
+                    gsets.append(gradient)
 
-            for i in range(1, max_cavity_steps + 1):
-                gradient = gset_curr - (step_size * i)
-                if gradient <= gset_min:
-                    logger.info(f"{cavity.name}: Limited to -{gset_curr - gset_min} MV/m below initial.")
-                    gsets.append(gset_min)
-                    break
-                gsets.append(gradient)
+                for i in range(1, max_cavity_steps + 1):
+                    gradient = gset_curr - (step_size * i)
+                    if gradient <= gset_min:
+                        logger.info(f"{cavity.name}: Limited to -{gset_curr - gset_min} MV/m below initial.")
+                        gsets.append(gset_min)
+                        break
+                    gsets.append(gradient)
 
-            logger.info(f"{cavity.name}:  GSETs to scan {gsets}")
+                logger.info(f"{cavity.name}:  GSETs to scan {gsets}")
 
-            for gset_next in gsets:
-                try:
-                    gset_curr = cavity.gset.value
-                    logger.info("Jiggling linac phases within +/- 5 degrees of initial")
-                    linac.jiggle_psets(5.0)
+                for gset_next in gsets:
+                    try:
+                        gset_curr = cavity.gset.value
+                        logger.info("Jiggling linac phases within +/- 5 degrees of initial")
+                        linac.jiggle_psets(5.0)
 
-                    # Here we are allowing larger step sizes than 1 MV/m (force=True)
-                    StateMonitor.check_state()
-                    logger.info(f"{cavity.name}:  Stepping gradient {gset_curr} => {gset_next}.")
-                    cavity.set_gradient(gset=gset_next, settle_time=settle_time, wait_for_ramp=True, force=True)
+                        # Here we are allowing larger step sizes than 1 MV/m (force=True)
+                        StateMonitor.check_state()
+                        logger.info(f"{cavity.name}:  Stepping gradient {gset_curr} => {gset_next}.")
+                        cavity.set_gradient(gset=gset_next, settle_time=settle_time, wait_for_ramp=True, force=True)
 
-                    # We expect set_gradient to possible wait for cryo.  This scan will likely not wait for cryo.
-                    settle_end = datetime.now()
-                    settle_start = settle_end - timedelta(seconds=settle_time)
+                        # We expect set_gradient to possible wait for cryo.  This scan will likely not wait for cryo.
+                        settle_end = datetime.now()
+                        settle_start = settle_end - timedelta(seconds=settle_time)
 
-                    logger.info(f"Waiting on averaging time ({avg_time} seconds)")
-                    avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
+                        logger.info(f"Waiting on averaging time ({avg_time} seconds)")
+                        avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
 
-                    # Write out the timestamps for this sample
-                    logger.info("Writing to data log")
-                    # f.write(
-                    write_data_index_row(f, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
-                                         avg_end=avg_end, settle_time=settle_time, avg_time=avg_time,
-                                         cavity_name=cavity.name, cavity_epics_name=cavity.epics_name)
-                    f.flush()
+                        # Write out the timestamps for this sample
+                        logger.info("Writing to data log")
+                        # f.write(
+                        write_data_index_row(f, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
+                                             avg_end=avg_end, settle_time=settle_time, avg_time=avg_time,
+                                             cavity_name=cavity.name, cavity_epics_name=cavity.epics_name)
+                        f.flush()
 
-                except Exception as ex:
-                    msg = f"Exception occurred during gradient scan\n{ex}"
-                    logger.error(msg)
-                    response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
-                    if not response.startswith('y'):
-                        logger.info("Exiting after error based on user response.")
-                        logger.info(f"{cavity.name}: Attempting to restoring cavity gradient")
-                        cavity.restore_gset()
-                        linac.restore_psets()
-                        raise ex
-                    else:
-                        logging.info("Continuing scan")
+                    except Exception as ex:
+                        msg = f"Exception occurred during gradient scan\n{ex}"
+                        logger.error(msg)
+                        response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
+                        if not response.startswith('y'):
+                            logger.info("Exiting after error based on user response.")
+                            logger.info(f"{cavity.name}: Attempting to restoring cavity gradient")
+                            cavity.restore_gset()
+                            linac.restore_psets()
+                            raise ex
+                        else:
+                            logging.info("Continuing scan")
 
-            # Walk the gradient back, and wait one second before each step.
-            cavity.restore_gset(settle_time=1)
-        linac.restore_psets()
+                # Walk the gradient back, and wait one second before each step.
+                cavity.restore_gset(settle_time=1)
+        finally:
+            linac.restore_psets()
+
+        return
 
 
 def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float, data_file: str, n_samples: int,
@@ -842,6 +854,8 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
     logger.info(f"Starting random sample random offset gradient scan")
 
     zone_names = list(linac.zones.keys())
+    logger.info("Setting NDX to operations settings")
+    linac.set_ndx_for_operations()
 
     # Get the list of available cavities
     available_cavities = {}
@@ -864,91 +878,95 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
         offset_list = np.array(offset_list)
 
     with open(data_file, mode="a") as f:
-        write_data_index_header(f, type='simple_gradient_scan', active_zones=zone_names,
-                                bypassed_cavities=bypassed_cavity_names, gradient_delta_range=offset_list)
+        try:
+            write_data_index_header(f, type='simple_gradient_scan', active_zones=zone_names,
+                                    bypassed_cavities=bypassed_cavity_names, gradient_delta_range=offset_list)
 
-        for i in range(1, n_samples + 1):
-            logger.info(f"Starting sample round {i} of {n_samples}.")
-            try:
-                # Sample the cavities to be adjusted this time
-                cavs = sorted(random.sample(list(available_cavities.values()), n_cavities), key=lambda x: x.name)
-                # Track which gsets are changing for each zone involved
-                zones_gsets = {}
-                # Track the new gsets for the cavities involved
-                new_gsets = {}
-                for cav in cavs:
-                    cav_offsets = offset_list[(offset_list + cav.gset.value > cav.gset_min) &
-                                              (offset_list + cav.gset.value < cav.gset_max)]
-                    offset = random.sample(cav_offsets, k=1)
-                    new_gsets[cav.name] = cav.gset.value + offset
-                    if cav.zone not in zones_gsets.keys():
-                        zones_gsets[cav.zone] = [None] * 8
-                    zones_gsets[cav.zone][cav.cavity_number-1] = new_gsets[cav.name]
-
-                # Check that the gradients won't affect heat too much in a given CM
-                skip = False
-                for zone in zones_gsets.keys():
-                    try:
-                        rel_change, new_heat, old_heat = zone.check_percent_heat_change(gradients=zones_gsets[zone])
-                        logger.info(f"{zone.name}: Expected heat change OK.  {old_heat}W -> {new_heat}W"
-                                    f" ({np.round(rel_change, 1)}%)")
-                    except Exception as ex:
-                        logger.error(ex)
-                        skip = True
-                        break
-                if skip:
-                    logger.info("Skipping this sample round due to large heat changes.")
-                    continue
-
-                # Check that the Linac is in a good state before adjusting each cavity
-                for cav in cavs:
-                    bad_state = True
-                    while bad_state:
-                        try:
-                            StateMonitor.check_state()
-                            # Since we're setting multiple cavities, we will enforce a single common settle time after
-                            # all are set.
-                            cav.set_gradient(gset=new_gsets[cav.name], settle_time=0, force=True)
-                            bad_state = False
-                        except Exception as ex:
-                            logger.error(f"Bad state detected: {ex}")
-                            response = input(f"Try to setup for this sample again? (n|y): ").lower().lstrip()
-                            if not response.startswith('y'):
-                                logger.info("Exiting sample iteration at user request post-exception.")
-                                raise ex
-
-                # Do the common settle time now
-                settle_start = datetime.now()
-                StateMonitor.monitor(duration=settle_time)
-                settle_end = datetime.now()
-
-                # Do the data collection (averaging) time now
-                avg_start = settle_end
-                StateMonitor.monitor(duration=avg_time)
-                avg_end = datetime.now()
-
-                logger.info("Writing to data log")
-                cav_names = [cav.name for cav in cavs]
-                cav_epics_names = [cav.epics_name for cav in cavs]
-                write_data_index_row(f, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
-                                     avg_end=avg_end, settle_time=settle_time, avg_time=avg_time, cavity_name=cav_names,
-                                     cavity_epics_name=cav_epics_names)
-                f.flush()
-
-            except Exception as ex:
-                logger.error(f"Exception raised: {ex}")
-                response = input(f"Restore cavities to initial values? (n|y): ").lower().lstrip()
-                if response.startswith('y'):
-                    logger.info("Attempting to restore PSETs and GSETs")
+            for i in range(1, n_samples + 1):
+                logger.info(f"Starting sample round {i} of {n_samples}.")
+                try:
+                    # Sample the cavities to be adjusted this time
+                    cavs = sorted(random.sample(list(available_cavities.values()), n_cavities), key=lambda x: x.name)
+                    # Track which gsets are changing for each zone involved
+                    zones_gsets = {}
+                    # Track the new gsets for the cavities involved
+                    new_gsets = {}
                     for cav in cavs:
-                        logger.info(f"Restoring {cav.name}")
-                        cav.restore_pset()
-                        cav.restore_gset(settle_time=1)
-                response = input(f"Continue with next iteration of scan? (n|y): ").lower().lstrip()
-                if response.startswith('y'):
-                    pass
-                else:
-                    raise ex
+                        cav_offsets = offset_list[(offset_list + cav.gset.value > cav.gset_min) &
+                                                  (offset_list + cav.gset.value < cav.gset_max)]
+                        offset = random.sample(cav_offsets, k=1)
+                        new_gsets[cav.name] = cav.gset.value + offset
+                        if cav.zone not in zones_gsets.keys():
+                            zones_gsets[cav.zone] = [None] * 8
+                        zones_gsets[cav.zone][cav.cavity_number-1] = new_gsets[cav.name]
 
-            logger.info("Scan complete")
+                    # Check that the gradients won't affect heat too much in a given CM
+                    skip = False
+                    for zone in zones_gsets.keys():
+                        try:
+                            rel_change, new_heat, old_heat = zone.check_percent_heat_change(gradients=zones_gsets[zone])
+                            logger.info(f"{zone.name}: Expected heat change OK.  {old_heat}W -> {new_heat}W"
+                                        f" ({np.round(rel_change, 1)}%)")
+                        except Exception as ex:
+                            logger.error(ex)
+                            skip = True
+                            break
+                    if skip:
+                        logger.info("Skipping this sample round due to large heat changes.")
+                        continue
+
+                    # Check that the Linac is in a good state before adjusting each cavity
+                    for cav in cavs:
+                        bad_state = True
+                        while bad_state:
+                            try:
+                                StateMonitor.check_state()
+                                # Since we're setting multiple cavities, we will enforce a single common settle time after
+                                # all are set.
+                                cav.set_gradient(gset=new_gsets[cav.name], settle_time=0, force=True)
+                                bad_state = False
+                            except Exception as ex:
+                                logger.error(f"Bad state detected: {ex}")
+                                response = input(f"Try to setup for this sample again? (n|y): ").lower().lstrip()
+                                if not response.startswith('y'):
+                                    logger.info("Exiting sample iteration at user request post-exception.")
+                                    raise ex
+
+                    # Do the common settle time now
+                    settle_start = datetime.now()
+                    StateMonitor.monitor(duration=settle_time)
+                    settle_end = datetime.now()
+
+                    # Do the data collection (averaging) time now
+                    avg_start = settle_end
+                    StateMonitor.monitor(duration=avg_time)
+                    avg_end = datetime.now()
+
+                    logger.info("Writing to data log")
+                    cav_names = [cav.name for cav in cavs]
+                    cav_epics_names = [cav.epics_name for cav in cavs]
+                    write_data_index_row(f, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
+                                         avg_end=avg_end, settle_time=settle_time, avg_time=avg_time, cavity_name=cav_names,
+                                         cavity_epics_name=cav_epics_names)
+                    f.flush()
+
+                except Exception as ex:
+                    logger.error(f"Exception raised: {ex}")
+                    response = input(f"Restore cavities to initial values? (n|y): ").lower().lstrip()
+                    if response.startswith('y'):
+                        logger.info("Attempting to restore PSETs and GSETs")
+                        for cav in cavs:
+                            logger.info(f"Restoring {cav.name}")
+                            cav.restore_pset()
+                            cav.restore_gset(settle_time=1)
+                    response = input(f"Continue with next iteration of scan? (n|y): ").lower().lstrip()
+                    if response.startswith('y'):
+                        pass
+                    else:
+                        raise ex
+
+                logger.info("Scan complete")
+        finally:
+            linac.restore_psets()
+
         return
