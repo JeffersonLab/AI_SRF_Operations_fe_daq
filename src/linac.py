@@ -386,7 +386,7 @@ class LinacFactory:
             name = e['name']
             cavity_type = p['CavityType']
             epics_name = p['EPICSName']
-            Q0 = p['Q0']
+            Q0 = float(p['Q0'])
             if prefix is not None or prefix != "":
                 epics_name = f"{prefix}{epics_name}"
             zone = p['Housed_by']
