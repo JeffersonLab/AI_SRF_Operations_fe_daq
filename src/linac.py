@@ -14,6 +14,7 @@ from state_monitor import StateMonitor, connection_cb, get_threshold_cb
 
 logger = logging.getLogger(__name__)
 
+test_prefix = "adamc:"
 
 class Linac:
     def __init__(self, name: str, prefix: str):
@@ -238,6 +239,15 @@ class LinacFactory:
         self.ced_instance = ced_instance
         self.ced_workspace = ced_workspace
         self.testing = testing
+        self.pv_prefix = ""
+        self.jt_suffix = ".ORBV"
+
+        if self.testing:
+            self.pv_prefix = test_prefix
+            self.jt_suffix = ""
+            logger.info(f"Using PV prefix '{self.pv_prefix}', no JT '.ORBV' suffix")
+        else:
+            logger.info(f"Using no PV prefix, but JT PV '.ORBV' suffix.")
 
     def create_linac(self, name: str, zone_names: List[str] = None, electrometer_names: List[str] = None,
                      detector_names: List[str] = None):
@@ -245,14 +255,8 @@ class LinacFactory:
         
         Segmask name format  is NorthLinac, SouthLinac.
         """
-        prefix = ""
-        if self.testing:
-            prefix = "adamc:"
-            logger.info(f"Using PV prefix '{prefix}'")
-        else:
-            logger.info(f"Using no PV prefix.")
 
-        linac = Linac(name, prefix=prefix)
+        linac = Linac(name, prefix=self.pv_prefix)
         self._setup_zones(linac=linac, zone_names=zone_names)
         self._setup_cavities(linac)
         self._setup_ndx(linac, electrometer_names=electrometer_names, detector_names=detector_names)
@@ -265,11 +269,6 @@ class LinacFactory:
         ced_url = f"http://{self.ced_server}/inventory?ced={self.ced_instance}&workspace={self.ced_workspace}" \
                   f"&{ced_params}"
         zones = self._get_ced_elements(ced_url)
-        prefix = ""
-        jt_suffix = ".ORBV"
-        if self.testing:
-            prefix = "adamc:"
-            jt_suffix = ""
         for z in zones:
             zone_name = z['name']
             segmask = z['properties']['SegMask']
@@ -280,7 +279,7 @@ class LinacFactory:
                     if zone_name not in linac.zones.keys():
                         # Add a zone if we haven't seen this before.
                         linac.zones[zone_name] = Zone(name=zone_name, linac=linac, controls_type=controls_type,
-                                                      prefix=prefix, jt_suffix=jt_suffix)
+                                                      prefix=self.pv_prefix, jt_suffix=self.jt_suffix)
 
     def _setup_cavities(self, linac: Linac, no_fe_file="./cfg/no_fe.tsv", fe_onset_file="./cfg/fe_onset.tsv") -> None:
         """Creates cavities from CED data and adds to linac and zone.  Expects _setup_zones to have been run."""
@@ -321,11 +320,8 @@ class LinacFactory:
                     else:
                         fe_onset[tokens[0]] = float(tokens[1])
 
-        if self.testing:
-            self._add_cavity_to_linac(cavity_elements, linac, prefix="adamc:", no_fe_gsets=no_fe,
-                                      fe_onset_gsets=fe_onset)
-        else:
-            self._add_cavity_to_linac(cavity_elements, linac, no_fe_gsets=no_fe, fe_onset_gsets=fe_onset)
+        self._add_cavity_to_linac(cavity_elements, linac, prefix=self.pv_prefix, no_fe_gsets=no_fe,
+                                  fe_onset_gsets=fe_onset)
 
     def _setup_ndx(self, linac: Linac, electrometer_names: List[str], detector_names: List[str] = None) -> None:
         """Creates NDX related objects from CED and adds them to the supplied Linac."""
@@ -346,18 +342,15 @@ class LinacFactory:
 
             # Only process electrometers that are requested (or all in nothing was specified
             if electrometer_names is None or name in electrometer_names:
-                prefix = ""
-                if self.testing:
-                    prefix = "adamc:"
-
                 logger.info(f"Adding {name} to {linac.name}'s electrometers")
-                ndxe = NDXElectrometer(name=name, epics_name=f"{prefix}{name}")
+                ndxe = NDXElectrometer(name=name, epics_name=f"{self.pv_prefix}{name}")
                 linac.ndx_electrometers[name] = ndxe
                 for d in p['Detectors'].values():
                     if len(d) > 0:
                         if detector_names is None or d in detector_names:
                             logger.info(f"Adding {name} to {linac.name}'s NDX detectors")
-                            linac.ndx_detectors[d] = NDXDetector(name=d, epics_name=f"{prefix}{d}", electrometer=ndxe)
+                            linac.ndx_detectors[d] = NDXDetector(name=d, epics_name=f"{self.pv_prefix}{d}",
+                                                                 electrometer=ndxe)
 
     @staticmethod
     def _get_ced_elements(ced_url: str) -> List[Dict]:
