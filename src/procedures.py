@@ -1,14 +1,64 @@
 import logging
 import math
 import random
+
+import numpy as np
 from datetime import datetime, timedelta
 from operator import attrgetter
+from typing import Union, List, Optional
 
 from cavity import Cavity
 from linac import Zone, Linac
 from state_monitor import StateMonitor
 
 logger = logging.getLogger(__name__)
+
+
+def write_data_index_header(file, **kwargs):
+    """Writes a generic header line for the mya data lookup index.
+
+    Args:
+        file: Is a writeable file object
+        kwargs: Dictionary will be written to the first line if any are specified
+    """
+    if len(kwargs) > 0:
+        file.write(f"# {kwargs}\n")
+    file.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
+
+
+def write_data_index_row(file, settle_start: datetime, settle_end: datetime, avg_start: datetime, avg_end: datetime,
+                         settle_time: float, avg_time: float, cavity_name: Union[str, List[str]],
+                         cavity_epics_name: Union[str, List[str]]):
+    """Write a standard entry to the data index file.
+
+    Args:
+        file: A writeable file object
+        settle_start: The start time for the (cryo) settle period
+        settle_end: The end time for the (cryo) settle period
+        avg_start: The start time for the pure data collection period (may be used for averaging, hence the name)
+        avg_end: The end time for the pure data collection period
+        settle_time: The duration in seconds of the settle time
+        avg_time:  The duration in seconds of the pure data collection period
+        cavity_name:  The CED names of cavity that was altered.
+        cavity_epics_name:  The EPICS names of the cavity that was altered
+    """
+    fmt = "%Y-%m-%d %H:%M:%S.%f"
+    settle_start_str = settle_start.strftime(fmt)
+    settle_end_str = settle_end.strftime(fmt)
+    avg_start_str = avg_start.strftime(fmt)
+    avg_end_str = avg_end.strftime(fmt)
+
+    # Convert a list-like into a delimited string
+    cn = cavity_name
+    if type(cavity_name).__name__ != 'str':
+        cn = ':'.join(cavity_name)
+
+    cen = cavity_epics_name
+    if type(cavity_epics_name).__name__ != 'str':
+        cen = ':'.join(cavity_epics_name)
+
+    file.write(f"{settle_start_str},{settle_end_str},{avg_start_str},{avg_end_str},{settle_time},"
+               f"{avg_time},{cn},{cen}\n")
 
 
 def run_find_fe_process(zone: Zone, linac: Linac, no_fe_file: str, fe_onset_file: str) -> None:
@@ -426,7 +476,9 @@ def find_fe_onset_low_baseline(zone: Zone, linac: Linac, no_fe_file: str, fe_ons
                 else:
                     # We found radiation, so now take small steps until it's gone.
                     logger.info(f"Found radiation.  Walking down in small steps until it disappears.")
-                    rad_gone = walk_cavity_down_from_radiation(cavity=cavity, linac=linac, quick_n_samples=quick_n_samples,
+                    rad_gone = walk_cavity_down_from_radiation(cavity=cavity, linac=linac,
+                                                               fine_step_size=fine_step_size,
+                                                               quick_n_samples=quick_n_samples,
                                                                slow_n_samples=slow_n_samples,
                                                                quick_t_threshold=quick_t_threshold,
                                                                slow_t_threshold=slow_t_threshold)
@@ -532,7 +584,7 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
             random.shuffle(cavities)
             if n_cavities is not None:
                 n_cavities_ = min(len(cavities), n_cavities)
-                cavities = cavities[:n_cavities]
+                cavities = cavities[:n_cavities_]
                 logger.info(f"Cavities {[cavity.name for cavity in cavities]} chosen for this round of changes.")
 
             # Got through and update the number of steps each cavity has taken.  Exclude cavity from allowable cavities
@@ -673,6 +725,19 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
     next step would have exceeded the maximum/minimum allowable gradient for that cavity, we set it to the max. Then the
     cavity is returned to it's initial value, and stepped down in a similar fashion.  Finally the cavity is returned to
     it's initial value, and the next cavity is scanned.
+
+    Args:
+        linac:  The linac to operate on.
+        avg_time:  How long to pause for mya to record data after the systems settle.  Typically used to create a less
+                   noisy average of the signal.
+        data_file: The path to location where the data sample metadata should be saved.
+        step_size:  The downward step size in MV/m used to reduce the gradient of a cavity.  Only positive numbers
+                    supported (positive number will lower GSET).
+        settle_time:  The amount of time to allow systems to settle after making a change to gradient.  Here this
+                      time is handled by the Cavity being changed and includes the time for cryo to adjust.  For
+                      step_size of 1 MV/m, settle time should be 6.
+        max_cavity_steps:  The maximum number of steps a single cavity is allowed to take.  None (default) implies
+                           unlimited.
     """
 
     logger.info(f"Starting simple_gradient_scan")
@@ -680,8 +745,7 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
     zone_names = list(linac.zones.keys())
 
     with open(data_file, mode="a") as f:
-        f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
-        f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
+        write_data_index_header(f, type='simple_gradient_scan', active_zones=zone_names, step_size=step_size)
 
         for cav_name in linac.cavities.keys():
             cavity = linac.cavities[cav_name]
@@ -733,18 +797,12 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                     logger.info(f"Waiting on averaging time ({avg_time} seconds)")
                     avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
 
-                    # Write out sample time to file
-                    fmt = "%Y-%m-%d %H:%M:%S.%f"
-                    settle_start_str = settle_start.strftime(fmt)
-                    settle_end_str = settle_end.strftime(fmt)
-                    avg_start_str = avg_start.strftime(fmt)
-                    avg_end_str = avg_end.strftime(fmt)
-
                     # Write out the timestamps for this sample
                     logger.info("Writing to data log")
-                    f.write(
-                        f"{settle_start_str},{settle_end_str},{avg_start_str},{avg_end_str},{settle_time},"
-                        f"{avg_time},{cavity.name},{cavity.epics_name}\n")
+                    # f.write(
+                    write_data_index_row(f, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
+                                         avg_end=avg_end, settle_time=settle_time, avg_time=avg_time,
+                                         cavity_name=cavity.name, cavity_epics_name=cavity.epics_name)
                     f.flush()
 
                 except Exception as ex:
@@ -755,7 +813,142 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                         logger.info("Exiting after error based on user response.")
                         logger.info(f"{cavity.name}: Attempting to restoring cavity gradient")
                         cavity.restore_gset()
+                        linac.restore_psets()
                         raise ex
+                    else:
+                        logging.info("Continuing scan")
 
             # Walk the gradient back, and wait one second before each step.
             cavity.restore_gset(settle_time=1)
+        linac.restore_psets()
+
+
+def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float, data_file: str, n_samples: int,
+                                                  settle_time: float = 6.0, n_cavities: int = 10,
+                                                  offset_list: Optional[List[float]] = None) -> None:
+    """This randomly selects cavities and applies a random offset perturbation to gradients from their initial setting.
+
+    At each iteration, n_cavities are selected to be perturbed.  Then each cavity's gradient is changed by a small
+    amount randomly chosen from offset_list.  Once all cavities have been set to the new value, the system waits
+    avg_time seconds so that data can be collected and stored by MYA.  After waiting the cavities are returned to their
+    initial gradients.
+
+    Note: The changes in gradient are not allowed to exceed the cavity's gset_max or gset_mix.
+
+    Args:
+
+    """
+
+    logger.info(f"Starting random sample random offset gradient scan")
+
+    zone_names = list(linac.zones.keys())
+
+    # Get the list of available cavities
+    available_cavities = {}
+    bypassed_cavity_names = []
+    for cav in linac.cavities.values():
+        if cav.bypassed_eff:
+            bypassed_cavity_names.append(cav.name)
+            continue
+        available_cavities[cav.name] = cav
+
+    if len(available_cavities) < n_cavities:
+        raise RuntimeError(f"Fewer cavities available ({len(available_cavities)}) than requested sample size "
+                           f"({n_cavities})")
+
+    # If nothing is given, specify a range between -1.5 and 1.5 excluding small steps between [-0.5, 0.5]
+    if offset_list is None:
+        offset_list = np.round(np.linspace(-1.5, -0.5, 11), 1).tolist()
+        offset_list += np.round(np.linspace(0.5, 1.5, 11), 1).tolist()
+    elif type(offset_list).__name__ != 'ndarray':
+        offset_list = np.array(offset_list)
+
+    with open(data_file, mode="a") as f:
+        write_data_index_header(f, type='simple_gradient_scan', active_zones=zone_names,
+                                bypassed_cavities=bypassed_cavity_names, gradient_delta_range=offset_list)
+
+        for i in range(1, n_samples + 1):
+            logger.info(f"Starting sample round {i} of {n_samples}.")
+            try:
+                # Sample the cavities to be adjusted this time
+                cavs = sorted(random.sample(list(available_cavities.values()), n_cavities), key=lambda x: x.name)
+                # Track which gsets are changing for each zone involved
+                zones_gsets = {}
+                # Track the new gsets for the cavities involved
+                new_gsets = {}
+                for cav in cavs:
+                    cav_offsets = offset_list[(offset_list + cav.gset.value > cav.gset_min) &
+                                              (offset_list + cav.gset.value < cav.gset_max)]
+                    offset = random.sample(cav_offsets, k=1)
+                    new_gsets[cav.name] = cav.gset.value + offset
+                    if cav.zone not in zones_gsets.keys():
+                        zones_gsets[cav.zone] = [None] * 8
+                    zones_gsets[cav.zone][cav.cavity_number-1] = new_gsets[cav.name]
+
+                # Check that the gradients won't affect heat too much in a given CM
+                skip = False
+                for zone in zones_gsets.keys():
+                    try:
+                        rel_change, new_heat, old_heat = zone.check_percent_heat_change(gradients=zones_gsets[zone])
+                        logger.info(f"{zone.name}: Expected heat change OK.  {old_heat}W -> {new_heat}W"
+                                    f" ({np.round(rel_change, 1)}%)")
+                    except Exception as ex:
+                        logger.error(ex)
+                        skip = True
+                        break
+                if skip:
+                    logger.info("Skipping this sample round due to large heat changes.")
+                    continue
+
+                # Check that the Linac is in a good state before adjusting each cavity
+                for cav in cavs:
+                    bad_state = True
+                    while bad_state:
+                        try:
+                            StateMonitor.check_state()
+                            # Since we're setting multiple cavities, we will enforce a single common settle time after
+                            # all are set.
+                            cav.set_gradient(gset=new_gsets[cav.name], settle_time=0, force=True)
+                            bad_state = False
+                        except Exception as ex:
+                            logger.error(f"Bad state detected: {ex}")
+                            response = input(f"Try to setup for this sample again? (n|y): ").lower().lstrip()
+                            if not response.startswith('y'):
+                                logger.info("Exiting sample iteration at user request post-exception.")
+                                raise ex
+
+                # Do the common settle time now
+                settle_start = datetime.now()
+                StateMonitor.monitor(duration=settle_time)
+                settle_end = datetime.now()
+
+                # Do the data collection (averaging) time now
+                avg_start = settle_end
+                StateMonitor.monitor(duration=avg_time)
+                avg_end = datetime.now()
+
+                logger.info("Writing to data log")
+                cav_names = [cav.name for cav in cavs]
+                cav_epics_names = [cav.epics_name for cav in cavs]
+                write_data_index_row(f, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
+                                     avg_end=avg_end, settle_time=settle_time, avg_time=avg_time, cavity_name=cav_names,
+                                     cavity_epics_name=cav_epics_names)
+                f.flush()
+
+            except Exception as ex:
+                logger.error(f"Exception raised: {ex}")
+                response = input(f"Restore cavities to initial values? (n|y): ").lower().lstrip()
+                if response.startswith('y'):
+                    logger.info("Attempting to restore PSETs and GSETs")
+                    for cav in cavs:
+                        logger.info(f"Restoring {cav.name}")
+                        cav.restore_pset()
+                        cav.restore_gset(settle_time=1)
+                response = input(f"Continue with next iteration of scan? (n|y): ").lower().lstrip()
+                if response.startswith('y'):
+                    pass
+                else:
+                    raise ex
+
+            logger.info("Scan complete")
+        return
