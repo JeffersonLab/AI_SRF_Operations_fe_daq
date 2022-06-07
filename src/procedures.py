@@ -874,8 +874,7 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
     if offset_list is None:
         offset_list = np.round(np.linspace(-1.5, -0.5, 11), 1).tolist()
         offset_list += np.round(np.linspace(0.5, 1.5, 11), 1).tolist()
-    elif type(offset_list).__name__ != 'ndarray':
-        offset_list = np.array(offset_list)
+    offset_list = np.array(offset_list)
 
     with open(data_file, mode="a") as f:
         try:
@@ -886,16 +885,24 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
                 logger.info(f"Starting sample round {i} of {n_samples}.")
                 try:
                     # Sample the cavities to be adjusted this time
-                    cavs = sorted(random.sample(list(available_cavities.values()), n_cavities), key=lambda x: x.name)
+                    available_cavs = list(available_cavities.values())
+                    cavs = sorted(random.sample(available_cavs, n_cavities), key=lambda x: x.name)
                     # Track which gsets are changing for each zone involved
                     zones_gsets = {}
                     # Track the new gsets for the cavities involved
                     new_gsets = {}
+                    logger.info(f"Adjusting {','.join([cav.name for cav in cavs])}")
                     for cav in cavs:
                         cav_offsets = offset_list[(offset_list + cav.gset.value > cav.gset_min) &
-                                                  (offset_list + cav.gset.value < cav.gset_max)]
-                        offset = random.sample(cav_offsets, k=1)
+                                                  (offset_list + cav.gset.value < cav.gset_max)].tolist()
+                        if len(cav_offsets) > 0:
+                            offset = random.sample(cav_offsets, k=1)[0]
+                        else:
+                            offset = 0
+                            logger.info(f"{cav.name}: No valid offsets.  Current, Min, Max GSET: {cav.gset.value},"
+                                        f" {cav.gset_min}, {cav.gset_max}.  Cavity unchanged.")
                         new_gsets[cav.name] = cav.gset.value + offset
+
                         if cav.zone not in zones_gsets.keys():
                             zones_gsets[cav.zone] = [None] * 8
                         zones_gsets[cav.zone][cav.cavity_number-1] = new_gsets[cav.name]
@@ -905,8 +912,8 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
                     for zone in zones_gsets.keys():
                         try:
                             rel_change, new_heat, old_heat = zone.check_percent_heat_change(gradients=zones_gsets[zone])
-                            logger.info(f"{zone.name}: Expected heat change OK.  {old_heat}W -> {new_heat}W"
-                                        f" ({np.round(rel_change, 1)}%)")
+                            logger.info(f"{zone.name}: Expected heat change OK.  {np.round(old_heat, 1)}W ->"
+                                        f" {np.round(new_heat, 1)}W ({np.round(rel_change, 1)}%)")
                         except Exception as ex:
                             logger.error(ex)
                             skip = True
@@ -933,6 +940,7 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
                                     raise ex
 
                     # Do the common settle time now
+                    logger.info(f"Waiting {settle_time} seconds for cryo to settle across ALL cavities.")
                     settle_start = datetime.now()
                     StateMonitor.monitor(duration=settle_time)
                     settle_end = datetime.now()
