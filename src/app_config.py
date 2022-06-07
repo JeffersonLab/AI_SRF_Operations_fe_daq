@@ -1,6 +1,10 @@
 import json
 import threading
 import os
+import logging
+
+
+logger = logging.getLogger(__name__)
 
 
 class Config:
@@ -19,9 +23,18 @@ class Config:
             filename:  The name of the file parse
         """
         with cls.config_lock:
-            with open(filename, mode="r") as f:
-                jsondata = ''.join(line for line in f if not line.strip().startswith('#'))
+            try:
+                with open(filename, mode="r") as f:
+                    jsondata = ''.join(line for line in f if not line.strip().startswith('#'))
+            except Exception as exc:
+                logger.error(f"Error reading file '{filename}': {exc}")
+                raise exc
+
+            try:
                 cls.config = json.loads(jsondata)
+            except Exception as exc:
+                logger.error(f"Error parsing config file '{filename}': ")
+                raise exc
 
     @classmethod
     def clear_config(cls):
