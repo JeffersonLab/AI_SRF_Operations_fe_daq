@@ -1,7 +1,6 @@
 import logging
 import os
 import sys
-import traceback
 import argparse
 import signal
 from datetime import datetime
@@ -10,7 +9,6 @@ from linac import LinacFactory
 from app_config import Config
 
 import procedures
-
 
 
 def sigint_handler(sig, frame):
@@ -101,7 +99,7 @@ def main() -> int:
                                  help="How many times should a cavity be stepped up and down.", default=2)
 
     random_gradient.add_argument('--linac-zones', nargs="+", required=False, default=None,
-                                  help="Selection of zones from linac that will be included in test. All if empty")
+                                 help="Selection of zones from linac that will be included in test. All if empty")
     random_gradient.add_argument('-s', '--settle-time', default=0,
                                  help="How long in seconds to let CEBAF sit after making changes to RF")
     random_gradient.add_argument('-a', '--average-time', default=3,
@@ -113,7 +111,6 @@ def main() -> int:
     random_gradient.add_argument('-g', '--gradient-offsets', required=False, type=str, nargs="+",
                                  help="The set of gradient offsets to draw from when randomly updating a gradient",
                                  default=None)
-
 
     try:
         args = parser.parse_args()
