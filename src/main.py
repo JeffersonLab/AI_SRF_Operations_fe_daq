@@ -64,6 +64,8 @@ def main() -> int:
     gradient = subparsers.add_parser("gradient_scan", help="Investigate gradient parameter space of set of zones")
     simple_gradient = subparsers.add_parser("simple_gradient_scan",
                                             help='Scan gradients of a set of cavities, one-at-atime')
+    random_gradient = subparsers.add_parser("random_sample_gradient_scan",
+                                            help='Scan combinations of gradients.  Randomly selected, randomly offset.')
 
     onset.add_argument('-z', '--zone', help='The primary zone to test', required=True)
     onset.add_argument('-d', '--detectors', nargs='*',
@@ -97,6 +99,21 @@ def main() -> int:
                                  help="How large of a gradient step to take each time. Max value of 1.0.", default=1.0)
     simple_gradient.add_argument('-n', '--num-steps', required=True, type=int,
                                  help="How many times should a cavity be stepped up and down.", default=2)
+
+    random_gradient.add_argument('--linac-zones', nargs="+", required=False, default=None,
+                                  help="Selection of zones from linac that will be included in test. All if empty")
+    random_gradient.add_argument('-s', '--settle-time', default=0,
+                                 help="How long in seconds to let CEBAF sit after making changes to RF")
+    random_gradient.add_argument('-a', '--average-time', default=3,
+                                 help="How many seconds of data should we allow the archiver to collect to average results")
+    random_gradient.add_argument('-S', '--num-samples', required=False, type=int,
+                                 help="How many gradient combinations to sample", default=1)
+    random_gradient.add_argument('-n', '--num-cavities', required=False, type=int,
+                                 help="How many cavities should be updated in each sample.", default=2)
+    random_gradient.add_argument('-g', '--gradient-offsets', required=False, type=str, nargs="+",
+                                 help="The set of gradient offsets to draw from when randomly updating a gradient",
+                                 default=None)
+
 
     try:
         args = parser.parse_args()
@@ -193,6 +210,32 @@ def main() -> int:
                 # Put the PSETs back where you found them.  If the user exits in the middle of the scan, we want to
                 # return PSETs no matter what.
                 linac.restore_psets()
+        elif args.command == 'random_sample_gradient_scan':
+            print(args)
+            zone_names = args.linac_zones
+            average_time = float(args.average_time)
+            settle_time = float(args.settle_time)
+            num_samples = args.num_samples
+            num_cavities = int(args.num_cavities)
+            gradient_offsets = args.gradient_offsets
+            data_file = os.path.join(log_dir, "random-sample-random-offset-scan.csv")
+
+            # Setup the Linac, Zones, and Cavities
+            logger.info(f"Creating linac {linac_name} with {zone_names}")
+            linac = LinacFactory(testing=testing).create_linac(name=linac_name, zone_names=zone_names)
+
+            logger.info("Starting random sample, random offset gradient scan")
+            try:
+                procedures.run_random_sample_random_offset_gradient_scan(linac=linac, avg_time=average_time,
+                                                                         data_file=data_file, n_samples=num_samples,
+                                                                         n_cavities=num_cavities,
+                                                                         settle_time=settle_time,
+                                                                         offset_list=gradient_offsets)
+            finally:
+                # Put the PSETs back where you found them.  If the user exits in the middle of the scan, we want to
+                # return PSETs no matter what.
+                linac.restore_psets()
+
 
         else:
             raise ValueError("Command required. fe_onset, gradient_scan")
