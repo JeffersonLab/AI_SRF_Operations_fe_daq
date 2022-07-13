@@ -88,15 +88,21 @@ class Cavity:
         elif self.odvh.value == 0:
             self.bypassed_eff = True
 
-        # Each cavity keeps track of an externally set maximum value
-        if gset_max is None:
+        # Each cavity keeps track of an externally set maximum value.  Make sure to update this after connecting to PVs.
+        self.gset_max = self.gset_min
+        self.gset_max_requested = gset_max
+
+    def update_gset_max(self, gset_max: Optional[float] = None):
+        """Update the maximum allowed gset.  If gset_max is None, use the original requested gset_max at construction"""
+        self.gset_max_requested = gset_max
+        if self.gset_max_requested is None:
             self.gset_max = self.odvh.value
-        elif gset_max > self.drvh.value:
+        elif self.gset_max_requested > self.drvh.value:
             logger.warning(
                 f"{self.name}: Tried to set gset_max > GSET.DRVH.  Set gset_max = GSET.DRVH ({self.drvh.value})")
             self.gset_max = self.drvh.value
         else:
-            self.gset_max = gset_max
+            self.gset_max = self.gset_max_requested
 
     def is_rf_on(self):
         """A simple method to determine if RF is on in a cavity"""

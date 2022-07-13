@@ -37,6 +37,7 @@ def create_linac_zone_cav() -> Tuple[Linac, Zone, Cavity]:
                  zone=z_1L22, Q0=6e9)
     logger.warning("Initializing R1M1 cavity")
     cav.wait_for_connections()
+    cav.update_gset_max()
 
     return linac, z_1L22, cav
 

@@ -398,6 +398,10 @@ class LinacFactory:
             if 'gset_max' in Config.config and p['EPICSName'] in Config.config['gset_max']:
                 gset_max = Config.config['gset_max'][p['EPICSName']]
 
+            if 'skip_cavity' in Config.config and p['EPICSName'] in Config.config['skip_cavity']:
+                logger.info(f"Skipping {name} per configuration file.")
+                continue
+
             gset_no_fe = None
             if no_fe_gsets is not None and epics_name in no_fe_gsets.keys():
                 gset_no_fe = no_fe_gsets[epics_name]
@@ -415,7 +419,8 @@ class LinacFactory:
 
         # Here we check that all cavity PVs are able to connect and run any initialization that happens after
         # PVs are connected.
-        logger.info("Waiting for cavities to establish EPICS CA connections.")
+        logger.info("Waiting for cavities to establish EPICS CA connections and setting gset_max.")
         for cavity in linac.cavities.values():
             cavity.wait_for_connections()
+            cavity.update_gset_max()
         logger.info("Done waiting for EPICS CA connections.")
