@@ -25,7 +25,8 @@ class Config:
         with cls.config_lock:
             try:
                 with open(filename, mode="r") as f:
-                    jsondata = ''.join(line for line in f if not line.strip().startswith('#'))
+                    # This will choke if a line has a comment after some content.  Comments MUST be on their own line.
+                    jsondata = ''.join(line.strip() for line in f if not line.strip().startswith('#'))
             except Exception as exc:
                 logger.error(f"Error reading file '{filename}': {exc}")
                 raise exc
