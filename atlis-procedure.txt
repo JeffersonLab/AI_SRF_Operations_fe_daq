@@ -96,3 +96,22 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 
 ## NL Gradient Scans
 [89] 11:31:22 adamc@opsl07 > ./bin/fe_daq.bash -l NorthLinac gradient_scan --linac-zones 1L22 1L23 1L24 1L25 -s 0.1 -n 320 --num-cavities 1 --max-cavity-steps 10
+
+###########################
+#####  June 21, 2022  #####
+###########################
+
+## Simple scan - this crashed when adjusting 1L10-2
+[184] 10:54:05 adamc@opsl01 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L10 -s 0 -a 3 -S 0.5 -n 4
+
+## Simple scan - I stretched the averaging time out to 5 seconds to help make the impact more conclusive.  It looked like there
+# was some overlap.  I also lowered R1A2 max_gset to 15.5 from 16.7.  There is some weird tuner issue.  Need to check if
+# a cavity is tuning (deta and dfqe are within +/-5 or 10 of zero, check with clyde or rama)
+[198] 11:04:16 adamc@opsl01 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L10 -s 0 -a 5 -S 0.5 -n 4
+
+# Cavity 2 tripped right away.  I'm only going to lower them for this run.
+[199] 11:41:08 adamc@opsl01 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L10 -s 0 -a 5 -S 0.5 -n 4
+
+# Cavity 2 tripped again.  I'm going to skip it, and set step size to 0.25 MV/m
+# Didn't bother.  Cavity one tripped again.  After calling Rama over for the fourth time, it became clear that this
+# wasn't going to work well on this cavity zone.
