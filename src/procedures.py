@@ -752,6 +752,11 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
     logger.info("Setting NDX to operations settings")
     linac.set_ndx_for_operations()
 
+    if step_size == 0:
+        raise ValueError("Must specify a non-zero step_size")
+    if max_cavity_steps <= 0:
+        raise ValueError("Must specify a positive max_cavity_steps")
+
     with open(data_file, mode="a") as f:
         try:
             write_data_index_header(f, type='simple_gradient_scan', active_zones=zone_names, step_size=step_size)
@@ -830,6 +835,7 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                 # Walk the gradient back, and wait one second before each step.
                 cavity.restore_gset(settle_time=1)
         finally:
+            logger.info("Restoring PSETs.")
             linac.restore_psets()
 
         return
