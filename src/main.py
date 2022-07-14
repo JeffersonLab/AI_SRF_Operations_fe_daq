@@ -108,7 +108,7 @@ def main() -> int:
                                  help="How many gradient combinations to sample", default=1)
     random_gradient.add_argument('-n', '--num-cavities', required=False, type=int,
                                  help="How many cavities should be updated in each sample.", default=2)
-    random_gradient.add_argument('-g', '--gradient-offsets', required=False, type=str, nargs="+",
+    random_gradient.add_argument('-g', '--gradient-offsets', required=False, type=float, nargs="+",
                                  help="The set of gradient offsets to draw from when randomly updating a gradient",
                                  default=None)
 
