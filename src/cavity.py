@@ -45,6 +45,7 @@ class Cavity:
         self.pset = epics.PV(f"{self.epics_name}PSET", connection_callback=connection_cb)
         self.odvh = epics.PV(f"{self.epics_name}ODVH", connection_callback=connection_cb)
         self.drvh = epics.PV(f"{self.epics_name}GSET.DRVH", connection_callback=connection_cb)
+        self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
         self.pset_init = self.pset.get()
         self.gset_init = self.gset.get()
 
@@ -77,7 +78,7 @@ class Cavity:
             self.rf_on.add_callback(rf_on_cb)
 
         # List of all PVs related to a cavity.
-        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on]
+        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on, self.deta]
         if self.stat1 is not None:
             self.pv_list.append(self.stat1)
 
@@ -94,7 +95,9 @@ class Cavity:
 
     def update_gset_max(self, gset_max: Optional[float] = None):
         """Update the maximum allowed gset.  If gset_max is None, use the original requested gset_max at construction"""
-        self.gset_max_requested = gset_max
+        if gset_max is not None:
+            self.gset_max_requested = gset_max
+
         if self.gset_max_requested is None:
             self.gset_max = self.odvh.value
         elif self.gset_max_requested > self.drvh.value:
@@ -103,6 +106,18 @@ class Cavity:
             self.gset_max = self.drvh.value
         else:
             self.gset_max = self.gset_max_requested
+
+    def is_cavity_tuning(self, max_deta: float = 7.5):
+        """A simple method to determine if an RF cavity's tuners are in operation.
+
+        If the detune angle is too big, then the cavity will be tuning.  If the detune angle is really too big, then
+        the cavity will trip.  Only defined for LLRF 3.0."""
+        if self.controls_type != "3.0":
+            raise RuntimeError(f"{self.name}: is_cavity_tuning only defined for LLRF 3.0, not {self.controls_type}")
+        if math.fabs(self.deta.get(use_monitor=False)) > max_deta:
+            return True
+        else:
+            return False
 
     def is_rf_on(self):
         """A simple method to determine if RF is on in a cavity"""
@@ -219,6 +234,22 @@ class Cavity:
             msg = f"{self.name}: Can't move GSET more than 1 MV/m at a time. (new: {gset}, current: {current})"
             logger.error(msg)
             raise ValueError(msg)
+
+        # LLRF 3.0 (C75) had some troubles with long tuning times for modest gradient changes.  If we get ahead of this,
+        # then the cavity trips.
+        if self.controls_type == "3.0":
+            # In seconds
+            notification_interval = 10
+            # In seconds
+            wait_sleep = 0.05
+            wait_counter = notification_interval
+            while self.is_cavity_tuning():
+                if wait_counter >= notification_interval:
+                    wait_counter = 0
+                    logger.info(f"{self.name}: Waiting on cavity to tune.  {self.deta.pvname} = {self.deta.value}.")
+                StateMonitor.monitor(wait_sleep)
+                wait_counter += wait_sleep
+            logger.info(f"{self.name}: Cavity is acceptably tuned. {self.deta.pvname} = {self.deta.value}")
 
         # Instead of trying to watch tuner status, etc., we just set the gradient, then sleep some requested amount of
         # time.  This will need to be approached differently if used in a more general purpose application.

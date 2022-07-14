@@ -1,3 +1,4 @@
+import sys
 import threading
 import time
 from datetime import datetime
@@ -15,11 +16,22 @@ from linac import Zone, Linac
 logger = logging.getLogger()
 
 
-def get_cavity():
-    linac = Linac("NorthLinac", prefix="adamc:")
-    zone = Zone(name="1L22", linac=linac, controls_type='2.0')
-    cav = Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False, zone=zone,
-                 Q0=6e9)
+def get_cavity(controls_type='2.0'):
+    if controls_type == '2.0':
+        linac = Linac("NorthLinac", prefix="adamc:")
+        zone = Zone(name="1L22", linac=linac, controls_type='2.0')
+        cav = Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False, zone=zone,
+                     Q0=6e9)
+        cav.update_gset_max()
+    elif controls_type == '3.0':
+        linac = Linac("NorthLinac", prefix="adamc:")
+        zone = Zone(name="1L10", linac=linac, controls_type='3.0')
+        cav = Cavity(name="1L10-1", epics_name="adamc:R1A1", cavity_type="C75", length=0.4916, bypassed=False,
+                     zone=zone, Q0=6.3e9)
+        cav.update_gset_max()
+    else:
+        raise RuntimeError("Unsupported controls_type")
+
     return cav
 
 
@@ -134,6 +146,41 @@ class TestCavity(TestCase):
         with self.assertRaises(Exception) as context:
             cav.set_gradient(8, wait_for_ramp=False)
         cav.gset_max = old_max
+
+    def test_is_cavity_tuning(self):
+        cav = get_cavity(controls_type='3.0')
+        deta_old = cav.deta.value
+        try:
+            cav.deta.put(40)
+            time.sleep(0.1)
+            self.assertTrue(cav.is_cavity_tuning(max_deta=15))
+            time.sleep(0.1)
+            cav.deta.put(0)
+            time.sleep(0.1)
+            self.assertFalse(cav.is_cavity_tuning(max_deta=15))
+        finally:
+            cav.deta.put(deta_old)
+
+    def test_set_gradient_tuning(self):
+        cav = get_cavity(controls_type='3.0')
+        deta_old = cav.deta.value
+        gset_old = cav.gset.value
+
+        def do_tune():
+            cav.deta.put(0)
+
+        tuning_time = 0.25
+        try:
+            cav.deta.put(20)
+            start = datetime.now()
+            threading.Timer(tuning_time, do_tune).start()
+            cav.set_gradient(max(cav.gset_min, cav.gset.value-0.01), settle_time=0)
+            end = datetime.now()
+        finally:
+            cav.gset.put(gset_old)
+            cav.deta.put(deta_old)
+
+        self.assertTrue((end - start).total_seconds() > tuning_time, f"Cavity did not wait for tuning (<{tuning_time})")
 
     def test_set_gradient_ramping(self):
         cav = get_cavity()
