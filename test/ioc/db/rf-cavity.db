@@ -6,6 +6,7 @@
 # Basic RF PVs
 record(ao, "adamc:R$(A)GSET") {
     field(VAL, 5)
+    field(DRVH, 25)
     field(PINI, "YES")
 }
 record(ao, "adamc:R$(A)GMES") {
@@ -22,6 +23,11 @@ record(ao, "adamc:R$(A)PSET") {
 }
 
 record(ai, "adamc:R$(A)STAT1") {
+    field(VAL, 0)
+    field(PINI, "YES")
+}
+
+record(ai, "adamc:R$(A)DETA") {
     field(VAL, 0)
     field(PINI, "YES")
 }
