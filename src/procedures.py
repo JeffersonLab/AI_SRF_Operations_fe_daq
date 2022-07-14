@@ -897,7 +897,9 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
                     zones_gsets = {}
                     # Track the new gsets for the cavities involved
                     new_gsets = {}
+                    old_gsets = {}
                     logger.info(f"Adjusting {','.join([cav.name for cav in cavs])}")
+                    update_msg = ""
                     for cav in cavs:
                         cav_offsets = offset_list[(offset_list + cav.gset.value > cav.gset_min) &
                                                   (offset_list + cav.gset.value < cav.gset_max)].tolist()
@@ -908,11 +910,14 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
                             logger.info(f"{cav.name}: No valid offsets.  Current, Min, Max GSET: {cav.gset.value},"
                                         f" {cav.gset_min}, {cav.gset_max}.  Cavity unchanged.")
                         new_gsets[cav.name] = cav.gset.value + offset
+                        old_gsets[cav.name] = cav.gset.value
+                        update_msg += f" {cav.name}: {np.round(cav.gset.value, 2)}->{np.round(new_gsets[cav.name], 2)}"
 
                         if cav.zone not in zones_gsets.keys():
                             zones_gsets[cav.zone] = [None] * 8
                         zones_gsets[cav.zone][cav.cavity_number-1] = new_gsets[cav.name]
 
+                    logger.info(f"Applying these updates: {update_msg}")
                     # Check that the gradients won't affect heat too much in a given CM
                     skip = False
                     for zone in zones_gsets.keys():
@@ -963,6 +968,24 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
                                          avg_end=avg_end, settle_time=settle_time, avg_time=avg_time, cavity_name=cav_names,
                                          cavity_epics_name=cav_epics_names)
                     f.flush()
+
+                    # Restore the changed gradients back
+                    # Check that the Linac is in a good state before adjusting each cavity
+                    for cav in cavs:
+                        bad_state = True
+                        while bad_state:
+                            try:
+                                StateMonitor.check_state()
+                                # Since we're setting multiple cavities, we will enforce a single common settle time after
+                                # all are set.
+                                cav.set_gradient(gset=old_gsets[cav.name], settle_time=0, force=True)
+                                bad_state = False
+                            except Exception as ex:
+                                logger.error(f"Bad state detected: {ex}")
+                                response = input(f"Try to setup for this sample again? (n|y): ").lower().lstrip()
+                                if not response.startswith('y'):
+                                    logger.info("Exiting sample iteration at user request post-exception.")
+                                    raise ex
 
                 except Exception as ex:
                     logger.error(f"Exception raised: {ex}")
