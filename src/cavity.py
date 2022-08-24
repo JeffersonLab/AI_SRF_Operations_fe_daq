@@ -45,7 +45,6 @@ class Cavity:
         self.pset = epics.PV(f"{self.epics_name}PSET", connection_callback=connection_cb)
         self.odvh = epics.PV(f"{self.epics_name}ODVH", connection_callback=connection_cb)
         self.drvh = epics.PV(f"{self.epics_name}GSET.DRVH", connection_callback=connection_cb)
-        self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
         self.pset_init = self.pset.get()
         self.gset_init = self.gset.get()
 
@@ -55,15 +54,18 @@ class Cavity:
             self.rf_on = epics.PV(f"{self.epics_name}ACK1.B6", connection_callback=connection_cb)
             self.stat1 = None
             self.gset_min = 3
+            self.deta = None
         elif self.controls_type == '2.0':
             # 1 = RF on, 0 = RF off
             self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
             self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
             self.gset_min = 5
+            self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
         elif self.controls_type == '3.0':
             # 1 = RF on, 0 = RF off
             self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
             self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
+            self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
             self.gset_min = 5
 
         if self.cavity_type == "C100":
@@ -78,7 +80,9 @@ class Cavity:
             self.rf_on.add_callback(rf_on_cb)
 
         # List of all PVs related to a cavity.
-        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on, self.deta]
+        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on]
+        if self.deta is not None:
+            self.pv_list.append(self.deta)
         if self.stat1 is not None:
             self.pv_list.append(self.stat1)
 
@@ -123,15 +127,25 @@ class Cavity:
         """A simple method to determine if RF is on in a cavity"""
         return self.rf_on.value == 1
 
-    def is_gradient_ramping(self):
-        """Determine if the cavity gradient is ramping to the target."""
+    def is_gradient_ramping(self, gmes_threshold: float = 0.3) -> bool:
+        """Determine if the cavity gradient is ramping to the target.
+
+        The approach is different for every cavity type.  As a fallback, check if gmes is "close" to gset.  Some
+        cavities are off by more 0.25 MV/m while others are within <0.1 MV/m.  The default tolerance has to be
+        surprisingly high because of this.
+
+        Args:
+            gmes_threshold: The minimum absolute difference between gmes and gset that indicates ramping.  Only used if
+                            no better way of checking for ramping is present.
+        """
         if not self.is_rf_on():
             raise RuntimeError(f"RF is off at {self.name}")
 
         if self.stat1 is None:
             # For 6 GeV controls (LLRF 1.0), I don't know a simple check.  Gradient should be close to GSET if not,
             # we will call it ramping.  I don't think these old cavities have a built-in ramping feature.
-            is_ramping = math.fabs(self.gmes.value - self.gset.value) > 0.15
+            # Note: 1L04-5 was observed to settle out at ~0.25 MV/m off of GSET on July 14, 2022.
+            is_ramping = math.fabs(self.gmes.value - self.gset.value) > 0.3
         else:
             if self.controls_type == '2.0':
                 # For C100, the "is ramping" field is the 11th bit counting from zero.  If it's zero, then we're not
