@@ -59,7 +59,9 @@ class Linac:
             pvlist.append(cavity.pset.pvname)
             values.append(cavity.get_jiggled_pset_value(delta=delta))
 
+        logger.info(f"Jiggling PSETs for {pvlist}")
         epics.caput_many(pvlist, values, wait=True)
+        logger.info("PSETs jiggled")
 
     def restore_psets(self):
         for cavity in self.cavities.values():
