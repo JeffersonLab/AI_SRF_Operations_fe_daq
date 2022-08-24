@@ -115,3 +115,47 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 # Cavity 2 tripped again.  I'm going to skip it, and set step size to 0.25 MV/m
 # Didn't bother.  Cavity one tripped again.  After calling Rama over for the fourth time, it became clear that this
 # wasn't going to work well on this cavity zone.
+
+###########################
+#####  July 14, 2022  #####
+###########################
+
+# I had a few failed attempts do to CA security permissions not being open
+## [165] 9:30:15 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L22 1L23 1L24 1L25 --settle-time 0 --average-time --step-size 0.5 -n 7
+
+# First run on 1L22 - 1L25 (worked well, finished at 10:22:09)
+[168] 9:45:54 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L22 1L23 1L24 1L25 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 7
+
+# Trial run of the random sample gradient scan (worked well, finished at 10:34:50)
+[171] 10:32:09 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L25 --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 2 --gradient-offsets -1.5 -1.25 -1.0 -0.75 -0.5
+
+# Full run on 1L22-1L25 worked well.  I saw some weird PMES behavior on 1L22.  This finished around 11:36.
+[172] 10:34:50 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L22 1L23 1L24 1L25 --settle-time 0 --average-time 3 --num-samples 50 --num-cavities 6 --gradient-offsets -1.5 -1.25 -1.0 -0.75 -0.5
+
+# Failed.  Looks like the llrf 1.0 does not have an R...DETA PV (Does have TDETA??)
+[173] 11:50:01 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L02 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 7
+
+# Trying fewer steps going both up and down on 1L02 only
+[176] 12:04:52 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L02 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+
+# Same simple scan on 1L03 - 1L05 (this crashed while restoring 1L03-8, since it's orig gset was higher than ODVH)
+[177] 12:14:23 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L03 1L04 1L05 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+
+# Same simple scan, but on 1L04 and 1L05 since the earlier attempt aborted right after finishing 1L03.
+[178] 12:21:25 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L04 1L05 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+
+# Had to start over.  One cavity would not finish ramping
+[179] 12:26:57 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L04 1L05 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+
+# Aborted because of what looks like numerical error.  Tried to set GSET to 16.0000002, ODVH was 16.
+[180] 12:45:41 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L07 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+
+# Rerunning
+# Aborted on another similar numerical error trying to restore orignial 1L07-7 gset which is slightly above ODVH (17.300000015 vs 17.3)
+[181] 12:51:34 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L07 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+
+# Tried to include a config file that skips 1L07-1 to 1L07-6. Didn't seem to work
+[184] 13:04:04 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L07 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+
+# 1L10-3 RF tripped off and Ops was having trouble recovering it.  I decided to stop here since my time was up anyway.
+[186] 13:17:00 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L10 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
