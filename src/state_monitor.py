@@ -43,7 +43,7 @@ def get_hv_read_back_cb(target_hv: float, threshold: float = 0.15):
     def _hv_read_back_cb(pvname: str, value: float, **kwargs) -> None:
         """Watch that HV readbacks don't differ from nominal by more than 10%"""
         # Nominally supposed to be ~1000V, but in practice the range is pretty broad
-        if value < target_hv * (1 - threshold) or value > (target_hv + threshold):
+        if np.abs(target_hv - value) > np.abs(target_hv * threshold):
             StateMonitor.hv_has_problem(pvname=pvname)
             logger.error(f"{pvname} value is out of spec. ({value} != {target_hv} +/-{np.round(threshold * 100, 0)}%).")
         else:
