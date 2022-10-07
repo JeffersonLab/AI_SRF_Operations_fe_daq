@@ -211,7 +211,7 @@ class Cavity:
         # We should be within a single step here.
         self.set_gradient(gset=gset, **kwargs)
 
-    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=10,
+    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
                      force: bool = False, gradient_epsilon: float = 0.05):
         """Set a cavity's gradient and wait for supporting systems to compensate for the change.
 
