@@ -159,3 +159,16 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 
 # 1L10-3 RF tripped off and Ops was having trouble recovering it.  I decided to stop here since my time was up anyway.
 [186] 13:17:00 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L10 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+
+
+
+###########################
+######  Sep 7, 2022  ######
+###########################
+
+# First try - went well finished around 9:40 AM.  This has more steps than the July 14 scan (7 vs 9).  Something to keep in mind when we compare.
+[217] 8:55:52 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L22 1L23 1L24 1L25 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 9
+
+# Doing the random scan - ran fine.  1L25-1 and 1L23-6 (?) would take longer to tune than expected and help up the show a few times.
+[218] 9:41:53 adamc@opsl06 > bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L22 1L23 1L24 1L25 --settle-time 0 --average-time 3 --num-samples 50 --num-cavities 6 --gradient-offsets -1.5 -1.25 -1.0 -0.75 -0.5
+
