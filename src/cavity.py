@@ -6,7 +6,7 @@ import epics
 import logging
 import numpy as np
 
-from state_monitor import connection_cb, rf_on_cb, StateMonitor
+from state_monitor import connection_cb, rf_on_cb, StateMonitor, get_threshold_cb
 
 logger = logging.getLogger(__name__)
 
@@ -55,17 +55,22 @@ class Cavity:
             self.stat1 = None
             self.gset_min = 3
             self.deta = None
+            # TODO: Figure out the master FSD signal is for a C25/C50 cavity
+            # self.fsd = None
         elif self.controls_type == '2.0':
             # 1 = RF on, 0 = RF off
             self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
             self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
             self.gset_min = 5
             self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
+            # self.fccver = epics.PV(f"{self.epics_name}FCCVER", connection_callback=connection_cb)
+            # self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
         elif self.controls_type == '3.0':
             # 1 = RF on, 0 = RF off
             self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
             self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
             self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
+            # self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
             self.gset_min = 5
 
         if self.cavity_type == "C100":
@@ -78,6 +83,9 @@ class Cavity:
         # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
         if not self.bypassed:
             self.rf_on.add_callback(rf_on_cb)
+            # if self.fsd is not None:
+            #     If not 768, then we have an FSD being pulled.
+            #     self.fsd.add_callback(get_threshold_cb(low=768, high=768))
 
         # List of all PVs related to a cavity.
         self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on]
@@ -85,6 +93,8 @@ class Cavity:
             self.pv_list.append(self.deta)
         if self.stat1 is not None:
             self.pv_list.append(self.stat1)
+        # if self.fsd is not None:
+        #     self.pv_list.append(self.fsd)
 
         # Cavity can be effectively bypassed in a number of ways.  Work through that here.
         self.bypassed_eff = bypassed
@@ -145,7 +155,7 @@ class Cavity:
             # For 6 GeV controls (LLRF 1.0), I don't know a simple check.  Gradient should be close to GSET if not,
             # we will call it ramping.  I don't think these old cavities have a built-in ramping feature.
             # Note: 1L04-5 was observed to settle out at ~0.25 MV/m off of GSET on July 14, 2022.
-            is_ramping = math.fabs(self.gmes.value - self.gset.value) > 0.3
+            is_ramping = math.fabs(self.gmes.value - self.gset.value) > gmes_threshold
         else:
             if self.controls_type == '2.0':
                 # For C100, the "is ramping" field is the 11th bit counting from zero.  If it's zero, then we're not
