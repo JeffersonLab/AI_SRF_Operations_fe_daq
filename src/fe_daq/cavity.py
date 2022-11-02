@@ -56,21 +56,23 @@ class Cavity:
             self.gset_min = 3
             self.deta = None
             # TODO: Figure out the master FSD signal is for a C25/C50 cavity
-            # self.fsd = None
+            self.fccver = None
+            self.fsd = None
         elif self.controls_type == '2.0':
             # 1 = RF on, 0 = RF off
             self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
             self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
             self.gset_min = 5
             self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
-            # self.fccver = epics.PV(f"{self.epics_name}FCCVER", connection_callback=connection_cb)
-            # self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
+            self.fccver = epics.PV(f"{self.epics_name}FCCVER", connection_callback=connection_cb)
+            self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
         elif self.controls_type == '3.0':
             # 1 = RF on, 0 = RF off
             self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
             self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
             self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
-            # self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
+            self.fccver = None
+            self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
             self.gset_min = 5
 
         if self.cavity_type == "C100":
@@ -83,18 +85,14 @@ class Cavity:
         # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
         if not self.bypassed:
             self.rf_on.add_callback(rf_on_cb)
-            # if self.fsd is not None:
-            #     If not 768, then we have an FSD being pulled.
-            #     self.fsd.add_callback(get_threshold_cb(low=768, high=768))
+            if self.fsd is not None:
+                # If not 768, then we have an FSD being pulled.
+                self.fsd.add_callback(get_threshold_cb(low=768, high=768))
 
         # List of all PVs related to a cavity.
-        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on]
-        if self.deta is not None:
-            self.pv_list.append(self.deta)
-        if self.stat1 is not None:
-            self.pv_list.append(self.stat1)
-        # if self.fsd is not None:
-        #     self.pv_list.append(self.fsd)
+        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on, self.deta, self.stat1,
+                        self.fsd, self.fccver]
+        self.pv_list = [pv for pv in self.pv_list if pv is not None ]
 
         # Cavity can be effectively bypassed in a number of ways.  Work through that here.
         self.bypassed_eff = bypassed
