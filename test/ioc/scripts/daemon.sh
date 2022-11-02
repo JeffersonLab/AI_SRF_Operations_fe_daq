@@ -9,6 +9,11 @@ else
   exit 1
 fi
 
+if [ -f 'pid.txt' ] ; then
+  echo "pid.txt lock file found.  Not starting softIOC"
+  exit 1
+fi
+
 # Run the IOC
 procServ -n "DAQ Test SoftIOC" -L /dev/null -i ^D^C 21000 ./start.sh
 #procServ -n "DAQ Test SoftIOC" -L /dev/null -i ^D^C 20000 ./start.sh 2> /dev/null
