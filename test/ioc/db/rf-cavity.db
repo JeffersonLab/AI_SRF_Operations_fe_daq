@@ -35,6 +35,16 @@ record(ai, "adamc:R$(A)DETA") {
 
 # RF On PV
 # 12 GeV style controls
+#record(ao, "adamc:R$(A)FBRIO") {
+#    field(VAL, 1)
+#    field(PINI, "YES")
+#}
+#
+#record(ao, "adamc:R$(A)FCCVER") {
+#    field(VAL, 1)
+#    field(PINI, "YES")
+#}
+#
 record(ao, "adamc:R$(A)RFONr") {
     field(VAL, 1)
     field(PINI, "YES")
