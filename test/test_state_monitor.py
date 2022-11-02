@@ -105,19 +105,31 @@ class TestStateMonitor(TestCase):
 
     def test_monitor_good(self):
         # Clear out previous state
-        warnings.warn('HERE')
         reinit_all()
-        warnings.warn('HERE')
+
         # Create a cavity with supporting structure
         linac, zone, cav = create_linac_zone_cav()
-        warnings.warn('HERE')
+
         cav.rf_on.put(1, wait=True)
         time.sleep(0.01)
-        warnings.warn('HERE')
+
         start, end = StateMonitor.monitor(duration=0.5, user_input=False)
         if (end - start).total_seconds() > 0.6:
             self.fail("StateMonitor waited more than 0.6 while monitoring for 0.5 s")
-        warnings.warn('HERE')
+
+    def test_monitor_cavity_fsd(self):
+        reinit_all()
+
+        # Create a cavity with supporting structure
+        linac, zone, cav = create_linac_zone_cav()
+
+        cav.fsd.put(256, wait=True)
+        time.sleep(0.01)
+        with self.assertRaises(Exception) as context:
+            StateMonitor.monitor(duration=0, user_input=False)
+        cav.fsd.put(768, wait=True)
+        StateMonitor.monitor(duration=0, user_input=False)
+
     def test_monitor_bad(self):
         # Clear out previous state
         reinit_all()
