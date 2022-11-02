@@ -55,8 +55,8 @@ def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) 
     if low is None and high is None:
         raise ValueError("Either low or high must be specified")
     if low is not None and high is not None:
-        if low >= high:
-            raise ValueError("Low must be less than high thresholds")
+        if low > high:
+            raise ValueError("Low must be less than or equal to high thresholds")
 
     def threshold_cb(pvname: str, value: float, **kwargs) -> None:
         # Note low, high are nonlocal, but do not get modified
