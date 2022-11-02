@@ -5,8 +5,8 @@ import argparse
 import signal
 from datetime import datetime
 
-from linac import LinacFactory
-from app_config import Config
+from .linac import LinacFactory
+from .app_config import Config
 
 import procedures
 

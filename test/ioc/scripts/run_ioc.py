@@ -3,7 +3,7 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Dict
 
-from network import SSLContextAdapter
+from fe_daq.network import SSLContextAdapter
 import threading
 import requests
 import os

@@ -3,9 +3,9 @@ from unittest import TestCase
 import logging
 import numpy as np
 
-from detector import NDXElectrometer, NDXDetector
-from linac import Zone, Linac
-from cavity import Cavity
+from src.fe_daq.detector import NDXElectrometer, NDXDetector
+from src.fe_daq.linac import Zone, Linac
+from src.fe_daq.cavity import Cavity
 from scipy.stats import ttest_ind
 
 # logging.basicConfig(level=logging.DEBUG)

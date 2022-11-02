@@ -1,7 +1,7 @@
 import os
 from unittest import TestCase
 import logging
-from app_config import Config
+from src.fe_daq.app_config import Config
 from threading import Thread
 
 logger = logging.getLogger()

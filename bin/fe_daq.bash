@@ -8,4 +8,4 @@ export PATH="/usr/csite/pubtools/python/3.7/bin:$PATH"
 export PYTHONPATH="${DIR}/../src/:${PYTHONPATH}"
 
 # Run the app passing along all of the args
-python3.7 ${DIR}/../src/main.py "$@" 
+python3.7 ${DIR}/../src/fe_daq/main.py "$@"

@@ -5,10 +5,10 @@ import logging
 import numpy as np
 import epics
 
-from app_config import Config
-from cavity import Cavity
+from src.fe_daq.app_config import Config
+from src.fe_daq.cavity import Cavity
 # from config import Config
-from linac import LinacFactory, Linac, Zone
+from src.fe_daq.linac import LinacFactory, Linac, Zone
 
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()

@@ -8,10 +8,10 @@ import logging
 
 import epics
 
-from cavity import Cavity
+from src.fe_daq.cavity import Cavity
 
 # logging.basicConfig(level=logging.DEBUG)
-from linac import Zone, Linac
+from src.fe_daq.linac import Zone, Linac
 
 logger = logging.getLogger()
 

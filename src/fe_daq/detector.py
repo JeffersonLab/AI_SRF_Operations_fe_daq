@@ -4,7 +4,7 @@ from typing import Tuple, Optional
 
 import epics
 from scipy.stats import ttest_ind
-from state_monitor import connection_cb, get_hv_read_back_cb
+from .state_monitor import connection_cb, get_hv_read_back_cb
 
 logger = logging.getLogger(__name__)
 
