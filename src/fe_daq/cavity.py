@@ -6,7 +6,7 @@ import epics
 import logging
 import numpy as np
 
-from .state_monitor import connection_cb, rf_on_cb, StateMonitor, get_threshold_cb
+from state_monitor import connection_cb, rf_on_cb, StateMonitor, get_threshold_cb
 
 logger = logging.getLogger(__name__)
 

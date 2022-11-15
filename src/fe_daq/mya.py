@@ -17,7 +17,7 @@ Basic Usage Example:
 from typing import Any
 
 import requests
-from .network import SSLContextAdapter
+from network import SSLContextAdapter
 from datetime import datetime
 
 __myquery_url__ = "https://myaweb.acc.jlab.org/myquery"
