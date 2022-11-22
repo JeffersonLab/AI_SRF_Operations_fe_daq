@@ -2,7 +2,7 @@ import json
 import threading
 import os
 import logging
-
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -43,3 +43,9 @@ class Config:
 
         with cls.config_lock:
             cls.config = {}
+
+    @classmethod
+    def set_parameter(cls, key: str, value: Any):
+        """Set an individual config parameter"""
+        with cls.config_lock:
+            cls.config[key] = value
