@@ -15,7 +15,7 @@ if [ -f 'pid.txt' ] ; then
 fi
 
 # Run the IOC
-procServ -n "DAQ Test SoftIOC" -L /dev/null -i ^D^C 21000 ./start.sh
+procServ -p pid.txt -n "DAQ Test SoftIOC" -L /dev/null -i ^D^C 21000 ./start.sh
 #procServ -n "DAQ Test SoftIOC" -L /dev/null -i ^D^C 20000 ./start.sh 2> /dev/null
 #procServ -n "DAQ Test SoftIOC" -L /dev/null -i  20000 ./start.sh
 #procServ -n "DAQ Test SoftIOC" -L /dev/null -i 20000 ./start.sh 2> /dev/null
