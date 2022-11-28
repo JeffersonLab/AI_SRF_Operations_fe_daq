@@ -20,7 +20,7 @@ PVs = {}
 fe_onset = {}
 prefix = "adamc:"
 fe_active = {}  # Is a cavity field emitting? [str(pvname), bool].  Managed by gset_cb
-JT_valves = {}
+JT_valves = {}  # type: Dict[str, JT_Values]
 
 # Gets changed in main and callback threads
 gc_lock = threading.Lock()
@@ -238,7 +238,8 @@ class JTValve:
         self.stroke_pv = PV(f"{prefix}CEV{zone}JT")
         self.alarm = False
         PVs[self.stroke_pv.pvname] = self.stroke_pv
-        self.stroke_pv.wait_for_connection(timeout=1)
+        if not self.stroke_pv.wait_for_connection(timeout=1):
+            logging.error(f"{self.stroke_pv.pvname}: Timed out while waiting on connection.")
 
     def set_jt_high(self):
         self.recovery_datetime = datetime.now() + timedelta(seconds=5)
@@ -260,7 +261,8 @@ def setup_jt_valves():
         for zone in ['02', '03', '04', '05', '06', '07', '08', '09',
                      '10', '11', '12', '13', '14', '15', '16', '17', '18', '19',
                      '20', '21', '22', '23', '24', '25', '26']:
-            JT_valves[zone] = JTValve(zone=zone)
+            z = f"{linac}{zone}"
+            JT_valves[z] = JTValve(zone=z)
 
 
 if __name__ == "__main__":
