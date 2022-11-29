@@ -11,10 +11,6 @@ logger = logging.getLogger(__name__)
 has_connected = []
 has_connected_lock = threading.Lock()
 
-# An array for tracking if RF has ever been on in that zone
-first_rf_on = []
-first_rf_on_lock = threading.Lock()
-
 
 def connection_cb(pvname: str = None, conn: bool = None, **kwargs) -> None:
     """This is a generic connection callback that pauses application operation when a disconnect occurs.
@@ -49,6 +45,7 @@ def get_hv_read_back_cb(target_hv: float, threshold: float = 0.15):
         else:
             StateMonitor.hv_good(pvname=pvname)
     return _hv_read_back_cb
+
 
 def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) -> callable:
     """A generic callback generator for monitoring PVs that need to stay within a certain threshold."""
@@ -87,15 +84,8 @@ def rf_on_cb(pvname: str, value: float, **kwargs) -> None:
     """Monitor RF On PVs to make sure that the cavities are good to go for data collection"""
 
     if value == 1:
-        first_time = False
-        with first_rf_on_lock:
-            if pvname not in first_rf_on:
-                first_time = True
-                first_rf_on.append(pvname)
-
-        if not first_time:
-            StateMonitor.rf_turned_on(pvname=pvname)
-            logger.info(f"{pvname} RF is On ({value})")
+        StateMonitor.rf_turned_on(pvname=pvname)
+        logger.info(f"{pvname} RF is On ({value})")
     else:
         StateMonitor.rf_turned_off(pvname=pvname)
         logger.error(f"{pvname} RF is Off ({value})")
