@@ -3,13 +3,18 @@ from unittest import TestCase
 import logging
 import numpy as np
 
-from src.fe_daq.detector import NDXElectrometer, NDXDetector
-from src.fe_daq.linac import Zone, Linac
-from src.fe_daq.cavity import Cavity
+from fe_daq import app_config as config
+from fe_daq.detector import NDXElectrometer, NDXDetector
+from fe_daq.linac import Zone, Linac
+from fe_daq.cavity import Cavity
 from scipy.stats import ttest_ind
 
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
+
+
+def setUpModule():
+    config.set_parameter("testing", True)
 
 
 def get_cavity():

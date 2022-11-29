@@ -1,5 +1,5 @@
 import logging
-import warnings
+
 from typing import Tuple
 from unittest import TestCase
 import concurrent.futures
@@ -8,14 +8,19 @@ import time
 import epics
 import numpy as np
 
-from src.fe_daq.cavity import Cavity
-from src.fe_daq.detector import NDXElectrometer
-from src.fe_daq.linac import Zone, Linac
-from src.fe_daq.state_monitor import StateMonitor
+from fe_daq import app_config as config
+from fe_daq.cavity import Cavity
+from fe_daq.detector import NDXElectrometer
+from fe_daq.linac import Zone, Linac
+from fe_daq.state_monitor import StateMonitor
 
 logger = logging.getLogger()
 prefix = "adamc:"
 jt_suffix = ""
+
+
+def setUpModule():
+    config.set_parameter("testing", True)
 
 
 def reinit_all():
@@ -27,6 +32,8 @@ def reinit_all():
     # Clear out the state of previous PVs
     StateMonitor.clear_state()
     logger.setLevel(old_level)
+    config.clear_config()
+    config.set_parameter("testing", True)
 
 
 def create_linac_zone_cav() -> Tuple[Linac, Zone, Cavity]:
@@ -113,6 +120,7 @@ class TestStateMonitor(TestCase):
         cav.rf_on.put(1, wait=True)
         time.sleep(0.01)
 
+        print("BEFORE monitor")
         start, end = StateMonitor.monitor(duration=0.5, user_input=False)
         if (end - start).total_seconds() > 0.6:
             self.fail("StateMonitor waited more than 0.6 while monitoring for 0.5 s")

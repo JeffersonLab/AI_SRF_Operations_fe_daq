@@ -5,7 +5,7 @@ import logging
 import numpy as np
 import epics
 
-from fe_daq.app_config import Config
+from fe_daq import app_config as config
 from fe_daq.cavity import Cavity
 from fe_daq.linac import LinacFactory, Linac, Zone
 
@@ -13,7 +13,7 @@ from fe_daq.linac import LinacFactory, Linac, Zone
 logger = logging.getLogger()
 
 def setUpModule():
-    Config.set_parameter("testing", True)
+    config.set_parameter("testing", True)
 
 
 # This is a routine that should not be used with a real linac since it could overwhelm cryo and cause it to trip.
@@ -91,7 +91,7 @@ class TestLinacFactory(TestCase):
 
     def test__setup_cavities(self):
         # Add some gset_max limits via config
-        Config.set_parameter('gset_max', {'R1M1': 6, 'R1M2': 500})
+        config.set_parameter('gset_max', {'R1M1': 6, 'R1M2': 500})
 
         lf = LinacFactory(testing=True)
 
@@ -100,8 +100,8 @@ class TestLinacFactory(TestCase):
         lf._setup_zones(linac)
         lf._setup_cavities(linac)
 
-        Config.clear_config()
-        Config.set_parameter('testing', True)
+        config.clear_config()
+        config.set_parameter('testing', True)
 
         self.assertEqual(linac.zones['1L19'].cavities['1L19-1'].name, '1L19-1')
         self.assertEqual(linac.cavities['1L19-1'].name, '1L19-1')

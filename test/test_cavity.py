@@ -8,14 +8,16 @@ import logging
 
 import epics
 
-from fe_daq.app_config import Config
+from fe_daq import app_config as config
 from fe_daq.cavity import Cavity, LLRF3Cavity, LLRF2Cavity
 
 # logging.basicConfig(level=logging.DEBUG)
 from src.fe_daq.linac import Zone, Linac
 
+
 def setUpModule():
-    Config.set_parameter("testing", True)
+    config.set_parameter("testing", True)
+
 
 logger = logging.getLogger()
 

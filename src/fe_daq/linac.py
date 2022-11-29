@@ -7,7 +7,7 @@ import requests
 import epics
 
 from fe_daq.cavity import Cavity
-from fe_daq.app_config import Config
+from fe_daq import app_config as config
 from fe_daq.detector import NDXDetector, NDXElectrometer
 from fe_daq.network import SSLContextAdapter
 from fe_daq.state_monitor import StateMonitor, connection_cb, get_threshold_cb
@@ -347,9 +347,10 @@ class LinacFactory:
             if electrometer_names is None or name in electrometer_names:
                 logger.info(f"Adding {name} to {linac.name}'s electrometers")
 
-                target_hv = None
-                if 'ndx_hv' in Config.config and name in Config.config['ndx_hv']:
-                    target_hv = Config.config['ndx_hv'][name]
+                target_hv = config.get_parameter(['ndx_hv', name])
+                #
+                # if 'ndx_hv' in config.get_parameter(f'ndx_hv.{name}') and name in Config.config['ndx_hv']:
+                #     target_hv = Config.config['ndx_hv'][name]
 
                 ndxe = NDXElectrometer(name=name, epics_name=f"{self.pv_prefix}{name}", target_hv=target_hv)
                 linac.ndx_electrometers[name] = ndxe
@@ -397,11 +398,13 @@ class LinacFactory:
             bypassed = True if 'Bypassed' in p.keys() else False
 
             # Pull a new GSET limit from config file.
-            gset_max = None
-            if 'gset_max' in Config.config and p['EPICSName'] in Config.config['gset_max']:
-                gset_max = Config.config['gset_max'][p['EPICSName']]
+            gset_max = config.get_parameter(['gset_max', p['EPICSName']])
+            # gset_max = None
+            # if 'gset_max' in Config.config and p['EPICSName'] in Config.config['gset_max']:
+            #     gset_max = Config.config['gset_max'][p['EPICSName']]
 
-            if 'skip_cavity' in Config.config and p['EPICSName'] in Config.config['skip_cavity']:
+            if config.get_parameter(['skip_cavity', p['EPICSName']]) is not None:
+            # if 'skip_cavity' in Config.config and p['EPICSName'] in Config.config['skip_cavity']:
                 logger.info(f"Skipping {name} per configuration file.")
                 continue
 
