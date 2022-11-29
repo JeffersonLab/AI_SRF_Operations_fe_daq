@@ -5,13 +5,15 @@ import logging
 import numpy as np
 import epics
 
-from src.fe_daq.app_config import Config
-from src.fe_daq.cavity import Cavity
-# from config import Config
-from src.fe_daq.linac import LinacFactory, Linac, Zone
+from fe_daq.app_config import Config
+from fe_daq.cavity import Cavity
+from fe_daq.linac import LinacFactory, Linac, Zone
 
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
+
+def setUpModule():
+    Config.set_parameter("testing", True)
 
 
 # This is a routine that should not be used with a real linac since it could overwhelm cryo and cause it to trip.
@@ -89,7 +91,7 @@ class TestLinacFactory(TestCase):
 
     def test__setup_cavities(self):
         # Add some gset_max limits via config
-        Config.config['gset_max'] = {'R1M1': 6, 'R1M2': 500}
+        Config.set_parameter('gset_max', {'R1M1': 6, 'R1M2': 500})
 
         lf = LinacFactory(testing=True)
 
@@ -99,6 +101,7 @@ class TestLinacFactory(TestCase):
         lf._setup_cavities(linac)
 
         Config.clear_config()
+        Config.set_parameter('testing', True)
 
         self.assertEqual(linac.zones['1L19'].cavities['1L19-1'].name, '1L19-1')
         self.assertEqual(linac.cavities['1L19-1'].name, '1L19-1')
@@ -169,15 +172,15 @@ class TestLinac(TestCase):
             ndxd.update_background()
 
         for ndxd in linac.ndx_detectors.values():
-            print(ndxd.name)
-            print(ndxd.gamma_measurements, ndxd.gamma_background)
-            print(ndxd.neutron_measurements, ndxd.neutron_background)
+            # print(ndxd.name)
+            # print(ndxd.gamma_measurements, ndxd.gamma_background)
+            # print(ndxd.neutron_measurements, ndxd.neutron_background)
             self.assertEqual(num_samples, len(ndxd.gamma_measurements),
                              f"{ndxd.name}: gamma measurement length wrong. {ndxd.gamma_measurements}")
             self.assertEqual(num_samples, len(ndxd.neutron_measurements),
                              f"{ndxd.name}: neutron measurement length wrong. {ndxd.neutron_measurements}")
             is_rad, t_stat = ndxd.is_radiation_above_background()
-            print(t_stat)
+            # print(t_stat)
             self.assertFalse(is_rad,
                              f"{ndxd.name}: Rad too high, g_t: {ndxd.get_gamma_t_stat()},"
                              f" n_t: {ndxd.get_neutron_t_stat()}")
@@ -188,16 +191,16 @@ class TestLinac(TestCase):
         linac.get_radiation_measurements(num_samples)
 
         for ndxd in linac.ndx_detectors.values():
-            print(ndxd.name)
-            print(ndxd.gamma_measurements, ndxd.gamma_background)
-            print(ndxd.neutron_measurements, ndxd.neutron_background)
+            # print(ndxd.name)
+            # print(ndxd.gamma_measurements, ndxd.gamma_background)
+            # print(ndxd.neutron_measurements, ndxd.neutron_background)
 
             self.assertEqual(num_samples, len(ndxd.gamma_measurements),
                              f"{ndxd.name}: gamma measurement length wrong. {ndxd.gamma_measurements}")
             self.assertEqual(num_samples, len(ndxd.neutron_measurements),
                              f"{ndxd.name}: neutron measurement length wrong. {ndxd.neutron_measurements}")
             is_rad, t_stat = ndxd.is_radiation_above_background()
-            print(t_stat)
+            # print(t_stat)
             self.assertTrue(is_rad,
                             f"{ndxd.name}: Rad too low, g_t: {ndxd.get_gamma_t_stat()}, n_t: {ndxd.get_neutron_t_stat()}")
 
@@ -261,24 +264,3 @@ class TestZone(TestCase):
         g5 = zone.cavities['1L11-5'].gset.value
         g7 = zone.cavities['1L11-7'].gset.value
         zone.check_percent_heat_change(gradients=[None, None, None, None, g5+1, None, g7+1, None], percentage=10)
-
-
-    # def test_set_gradients(self):
-    #     lf = LinacFactory(testing=True)
-    #     linac = lf.create_linac(name="NorthLinac")
-    #     z_1L22 = linac.zones['1L22']
-    #     cav = z_1L22.cavities['1L22-1']
-    #
-    #     # Set everything to min gset.  Check that it worked
-    #     z_1L22.set_gradients(level="low")
-    #     self.assertEqual(5.0, cav.gset.get(use_monitor=False))
-    #
-    #     # Set cav to middle level and everything else to high
-    #     cav.gset.put(10)
-    #     z_1L22.set_gradients(exclude_cavs=[cav], level='high')
-    #
-    #     # Check that only cavities not excluded were updated
-    #     odvh = z_1L22.cavities['1L22-2'].odvh.value
-    #     result = z_1L22.cavities['1L22-2'].gset.get(use_monitor=False)
-    #     self.assertEqual(10, cav.gset.get(use_monitor=False))
-    #     self.assertTrue(odvh - 2 <= result <= odvh, f"ODVH:{odvh}, result:{result}")
