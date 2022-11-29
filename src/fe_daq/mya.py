@@ -14,8 +14,6 @@ Basic Usage Example:
     except ValueError as ex:
         print(f"Error retrieving archived value. {ex}", file=sys.stderr)
 """
-from typing import Any
-
 import requests
 from network import SSLContextAdapter
 from datetime import datetime
