@@ -6,15 +6,16 @@ from typing import List, Dict, Tuple, Optional
 import requests
 import epics
 
-from cavity import Cavity
-from app_config import Config
-from detector import NDXDetector, NDXElectrometer
-from network import SSLContextAdapter
-from state_monitor import StateMonitor, connection_cb, get_threshold_cb
+from fe_daq.cavity import Cavity
+from fe_daq.app_config import Config
+from fe_daq.detector import NDXDetector, NDXElectrometer
+from fe_daq.network import SSLContextAdapter
+from fe_daq.state_monitor import StateMonitor, connection_cb, get_threshold_cb
 
 logger = logging.getLogger(__name__)
 
 test_prefix = "adamc:"
+
 
 class Linac:
     def __init__(self, name: str, prefix: str):
@@ -414,9 +415,9 @@ class LinacFactory:
 
             # Only add cavities that are in zones in this Linac
             if zone in linac.zones.keys():
-                cavity = Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                                bypassed=bypassed, Q0=Q0, zone=linac.zones[zone], gset_no_fe=gset_no_fe,
-                                gset_fe_onset=gset_fe_onset, gset_max=gset_max)
+                cavity = Cavity.get_cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
+                                           bypassed=bypassed, Q0=Q0, zone=linac.zones[zone], gset_no_fe=gset_no_fe,
+                                           gset_fe_onset=gset_fe_onset, gset_max=gset_max)
                 linac.add_cavity(cavity)
 
         # Here we check that all cavity PVs are able to connect and run any initialization that happens after
