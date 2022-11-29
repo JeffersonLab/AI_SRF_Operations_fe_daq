@@ -1,4 +1,5 @@
 import math
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -6,17 +7,47 @@ import epics
 import logging
 import numpy as np
 
-from state_monitor import connection_cb, rf_on_cb, StateMonitor, get_threshold_cb
+from fe_daq.state_monitor import connection_cb, rf_on_cb, StateMonitor, get_threshold_cb
+from fe_daq import app_config as config
 
 logger = logging.getLogger(__name__)
 
 
 class Cavity:
+    @classmethod
+    def get_cavity(cls, name: str, epics_name: str, cavity_type: str, length: float,
+                   bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
+                   gset_max: float = None):
+        if zone.controls_type == '1.0':
+            gmes_step_size = config.get_parameter('LLRF1_gmes_step_size')
+            gmes_sleep_interval = config.get_parameter('LLRF1_gmes_sleep_interval')
+            cavity = LLRF1Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
+                               bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
+                               gset_max=gset_max, gmes_step_size=gmes_step_size, gmes_sleep_interval=gmes_sleep_interval)
+        elif zone.controls_type == '2.0':
+            gmes_step_size = config.get_parameter('LLRF2_gmes_step_size')
+            gmes_sleep_interval = config.get_parameter('LLRF2_gmes_sleep_interval')
+            cavity = LLRF2Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
+                               bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
+                               gset_max=gset_max, gmes_step_size=gmes_step_size, gmes_sleep_interval=gmes_sleep_interval)
+        elif zone.controls_type == '3.0':
+            gmes_step_size = config.get_parameter('LLRF3_gmes_step_size')
+            gmes_sleep_interval = config.get_parameter('LLRF3_gmes_sleep_interval')
+            cavity = LLRF3Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
+                               bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
+                               gset_max=gset_max, gmes_step_size=gmes_step_size, gmes_sleep_interval=gmes_sleep_interval)
+        else:
+            raise ValueError(f"Unsupported controls_type '{zone.controls_type}")
+
+        # Update gset_max and wait_for_connections should be called after cavities have been created.
+        return cavity
+
     # Importing Zone would result in circular imports
     # noinspection PyUnresolvedReferences
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
                  bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
-                 gset_max: float = None):
+                 gset_max: float = None, gset_min: float = None, gmes_step_size: float = 0.1,
+                 gmes_sleep_interval: float = 1):
         self.name = name
         self.epics_name = epics_name
         self.zone_name = zone.name
@@ -48,51 +79,26 @@ class Cavity:
         self.pset_init = self.pset.get()
         self.gset_init = self.gset.get()
 
-        # Create "RF On" PV and min stable gradient setting for each type of cavity
-        if self.controls_type == '1.0':
-            # 1 = RF on, 0 = RF off
-            self.rf_on = epics.PV(f"{self.epics_name}ACK1.B6", connection_callback=connection_cb)
-            self.stat1 = None
-            self.gset_min = 3
-            self.deta = None
-            # TODO: Figure out the master FSD signal is for a C25/C50 cavity
-            self.fccver = None
-            self.fsd = None
-        elif self.controls_type == '2.0':
-            # 1 = RF on, 0 = RF off
-            self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
-            self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
-            self.gset_min = 5
-            self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
-            self.fccver = epics.PV(f"{self.epics_name}FCCVER", connection_callback=connection_cb)
-            self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
-        elif self.controls_type == '3.0':
-            # 1 = RF on, 0 = RF off
-            self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
-            self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
-            self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
-            self.fccver = None
-            self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
-            self.gset_min = 5
+        # Minimum acceptable gradient.  Assigned in child classes.
+        self.gset_min = gset_min
 
         if self.cavity_type == "C100":
             self.shunt_impedance = 1241.3
         elif self.cavity_type == "C75":
             self.shunt_impedance = 1049
+        elif self.cavity_type == "C25":
+            self.shunt_impedance = 960
+        elif self.cavity_type == "C50":
+            self.shunt_impedance = 960
+        elif self.cavity_type == "P1R":
+            self.shunt_impedance = 960
         else:
             self.shunt_impedance = 960
+            logger.warning(f"{self.name}:  Unrecognized type '{self.cavity_type}'.  Using default impedance of "
+                           f"{self.shunt_impedance}.")
 
-        # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
-        if not self.bypassed:
-            self.rf_on.add_callback(rf_on_cb)
-            if self.fsd is not None:
-                # If not 768, then we have an FSD being pulled.
-                self.fsd.add_callback(get_threshold_cb(low=768, high=768))
-
-        # List of all PVs related to a cavity.
-        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh, self.rf_on, self.deta, self.stat1,
-                        self.fsd, self.fccver]
-        self.pv_list = [pv for pv in self.pv_list if pv is not None ]
+        self.pv_list = [self.gset, self.gmes, self.drvh, self.pset, self.odvh]
+        self.pv_list = [pv for pv in self.pv_list if pv is not None]
 
         # Cavity can be effectively bypassed in a number of ways.  Work through that here.
         self.bypassed_eff = bypassed
@@ -104,6 +110,11 @@ class Cavity:
         # Each cavity keeps track of an externally set maximum value.  Make sure to update this after connecting to PVs.
         self.gset_max = self.gset_min
         self.gset_max_requested = gset_max
+
+        # These dictate the defaults for walking a cavity.  Take steps of gmes_step_size and wait gmes_sleep_interval
+        # seconds between steps.  Here we pick cautious defaults that child classes can override.
+        self.gmes_step_size = gmes_step_interval
+        self.gmes_sleep_interval = gmes_sleep_interval
 
     def update_gset_max(self, gset_max: Optional[float] = None):
         """Update the maximum allowed gset.  If gset_max is None, use the original requested gset_max at construction"""
@@ -119,54 +130,36 @@ class Cavity:
         else:
             self.gset_max = self.gset_max_requested
 
-    def is_cavity_tuning(self, max_deta: float = 7.5):
-        """A simple method to determine if an RF cavity's tuners are in operation.
-
-        If the detune angle is too big, then the cavity will be tuning.  If the detune angle is really too big, then
-        the cavity will trip.  Only defined for LLRF 3.0."""
-        if self.controls_type != "3.0":
-            raise RuntimeError(f"{self.name}: is_cavity_tuning only defined for LLRF 3.0, not {self.controls_type}")
-        if math.fabs(self.deta.get(use_monitor=False)) > max_deta:
-            return True
-        else:
-            return False
-
     def is_rf_on(self):
-        """A simple method to determine if RF is on in a cavity"""
-        return self.rf_on.value == 1
+        raise NotImplementedError("Must be implemented by child classes")
 
-    def is_gradient_ramping(self, gmes_threshold: float = 0.3) -> bool:
-        """Determine if the cavity gradient is ramping to the target.
+    def is_gradient_ramping(self, gmes_threshold: float):
+        raise NotImplementedError("Must be implemented by child classes")
 
-        The approach is different for every cavity type.  As a fallback, check if gmes is "close" to gset.  Some
-        cavities are off by more 0.25 MV/m while others are within <0.1 MV/m.  The default tolerance has to be
-        surprisingly high because of this.
+    def is_tuning_required(self):
+        raise NotImplementedError("Must be implemented by child classes")
 
-        Args:
-            gmes_threshold: The minimum absolute difference between gmes and gset that indicates ramping.  Only used if
-                            no better way of checking for ramping is present.
-        """
-        if not self.is_rf_on():
-            raise RuntimeError(f"RF is off at {self.name}")
+    def wait_for_tuning(self, tune_timeout: float = 60):
+        """Method that waits for a cavity to be brought back within tune limits.  No Waiting if no tuning required."""
+        start_ramp = datetime.now()
+        needed_tuning = False
+        while self.is_tuning_required():
+            needed_tuning = True
+            logger.info(f"{self.name}: Waiting for tuner")
+            StateMonitor.monitor(0.05)
+            if (datetime.now() - start_ramp).total_seconds() > tune_timeout:
+                logger.warning(f"{self.name} is taking a long time to tune.")
+                response = input(
+                    f"Waited {tune_timeout} seconds for {self.name} to tune.  Continue waiting? (n|y): ").lstrip().lower()
+                if not response.startswith("y"):
+                    msg = f"User requested exit while waiting on {self.name} to tune."
+                    logger.error(msg)
+                    raise RuntimeError(msg)
+                # Restart the counter by pretending we just started to tune
+                start_ramp = datetime.now()
 
-        if self.stat1 is None:
-            # For 6 GeV controls (LLRF 1.0), I don't know a simple check.  Gradient should be close to GSET if not,
-            # we will call it ramping.  I don't think these old cavities have a built-in ramping feature.
-            # Note: 1L04-5 was observed to settle out at ~0.25 MV/m off of GSET on July 14, 2022.
-            is_ramping = math.fabs(self.gmes.value - self.gset.value) > gmes_threshold
-        else:
-            if self.controls_type == '2.0':
-                # For C100, the "is ramping" field is the 11th bit counting from zero.  If it's zero, then we're not
-                # ramping.  Otherwise, we're ramping.
-                is_ramping = int(self.stat1.value) & 0x0800 > 0
-            elif self.controls_type == '3.0':
-                # For C75, the "is ramping" field is the 15th bit counting from zero.  If it's zero, then we're not
-                # ramping.  Otherwise, we're ramping.  (Per K. Hesse)
-                is_ramping = int(self.stat1.value) & 0x8000 > 0
-            else:
-                raise RuntimeError(f"Unsupported controls type '{self.controls_type}'")
-
-        return is_ramping
+        if needed_tuning:
+            logger.info(f"{self.name}: Done tuning")
 
     def get_jiggled_pset_value(self, delta: float) -> float:
         """Calculate a random.uniform offset from pset_init of maximum +/- 5.  No changes to EPICS"""
@@ -181,20 +174,28 @@ class Cavity:
         if g is None:
             g = self.gset.value
 
-        # gradient is is units of MV/m. formula expects V/m, so 1e12
+        # gradient is units of MV/m. formula expects V/m, so 1e12
         return (g * g * self.length * 1e12) / (self.shunt_impedance * self.Q0)
 
-    def walk_gradient(self, gset: float, step_size: float = 1, **kwargs) -> None:
+    def walk_gradient(self, gset: float, step_size: Optional[float] = 1.0, wait_interval: Optional[float] = 0.0,
+                      **kwargs) -> None:
         """Move the gradient of the cavity to gset in steps.
 
         This always waits for the gradient to ramp, but allows for user specified settle_time and ramping timeouts.
 
         Args:
             gset:  The target gradient set point
-            step_size:  The maximum size steps to make in MV/m by absolute value.
+            step_size:  The maximum size steps to make in MV/m by absolute value.  Use class gmes_step_size if None.
+            wait_interval: How long to wait between steps.  Some cavities do not ramp themselves.  Use object's
+                           gmes_sleep_interval if None.
 
         Additional kwargs are passed to set_gradient.
         """
+
+        if step_size is None:
+            step_size = self.gmes_step_size
+        if wait_interval is None:
+            wait_interval = self.gmes_sleep_interval
 
         # Determine step direction
         actual_gset = self.gset.get(use_monitor=False)
@@ -208,35 +209,27 @@ class Cavity:
             logger.error(msg)
             raise ValueError(msg)
 
-        logger.info(f"Walking {self.name} from {actual_gset} to {gset} in {step_size} MV/m steps.")
+        logger.info(f"{self.name}: Walking {actual_gset} to {gset} in {step_size} MV/m steps with {wait_interval}s "
+                    f"waits.")
 
         # Walk step size until we're within a single step
         while abs(gset - actual_gset) > step_size:
             next_gset = actual_gset + (step_dir * step_size)
             self.set_gradient(gset=next_gset, **kwargs)
             actual_gset = self.gset.get(use_monitor=False)
+            if wait_interval > 0:
+                time.sleep(wait_interval)
 
         # We should be within a single step here.
         self.set_gradient(gset=gset, **kwargs)
 
-    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
-                     force: bool = False, gradient_epsilon: float = 0.05):
-        """Set a cavity's gradient and wait for supporting systems to compensate for the change.
-
-        New change can't be more than 1 MV/m away from current value, without force.  This attempts to wait for a cavity
-        to ramp if requested.  However, it also has a shortcut check that if the GMES is very close to the requested
-        GSET, then it will stop watching as the ramping is essentially over if it happened at all.
+    def _validate_requested_gradient(self, gset: float, force: bool):
+        """Run a series of checks to ensure that the new requested gradient makes is a viable.
 
         Args:
-            gset: The new value to set GSET to
-            settle_time: How long we need to wait for cryo system to adjust to change in heat load
-            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C100s ramp for larger steps.
-            ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
-            force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
-            gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
-
+            gset: The requested gset
+            force: Are we allowed to exceed single step limits.
         """
-
         if gset != 0 and self.bypassed_eff:
             msg = f"{self.name}: Can't turn on bypassed cavity"
             logger.error(msg)
@@ -257,22 +250,8 @@ class Cavity:
             logger.error(msg)
             raise ValueError(msg)
 
-        # LLRF 3.0 (C75) had some troubles with long tuning times for modest gradient changes.  If we get ahead of this,
-        # then the cavity trips.
-        if self.controls_type == "3.0":
-            # In seconds
-            notification_interval = 10
-            # In seconds
-            wait_sleep = 0.05
-            wait_counter = notification_interval
-            while self.is_cavity_tuning():
-                if wait_counter >= notification_interval:
-                    wait_counter = 0
-                    logger.info(f"{self.name}: Waiting on cavity to tune.  {self.deta.pvname} = {self.deta.value}.")
-                StateMonitor.monitor(wait_sleep)
-                wait_counter += wait_sleep
-            logger.info(f"{self.name}: Cavity is acceptably tuned. {self.deta.pvname} = {self.deta.value}")
-
+    def _set_gradient(self, gset: float, settle_time: float, wait_for_ramp: bool, ramp_timeout: float,
+                      gradient_epsilon: float) -> None:
         # Instead of trying to watch tuner status, etc., we just set the gradient, then sleep some requested amount of
         # time.  This will need to be approached differently if used in a more general purpose application.
         # C100's will ramp gradient for you, but we need to wait for it.
@@ -317,6 +296,59 @@ class Cavity:
         logger.info(f"{self.name} Waiting {settle_time} seconds for cryo to adjust")
         StateMonitor.monitor(duration=settle_time)
 
+    def _do_gradient_ramping(self, gset: float, settle_time: float, tune_timeout: float = 60, **kwargs):
+        """Slow ramp gradient to a new values.  Not all cavities allow time for tuners on a gset caput.
+
+        This is designed so that it pauses whenever the cavity requires tuning, not when the cavity is tuning.  The
+        idea is that tuners engage when a cavity crosses a detune max threshold, and the tuners run until the detuning
+        hits a lower limit.  We don't want to keep changing gradient (and forcing more detuning) when the cavity is
+        past the upper limit, but we don't want to wait until the tuners are completely done.
+        """
+        # Determine step direction
+        actual_gset = self.gset.get(use_monitor=False)
+        if gset >= actual_gset:
+            step_dir = 1
+        else:
+            step_dir = -1
+
+        logger.info(f"{self.name}: Manually ramping gradient from {actual_gset} to {gset} in {self.gmes_step_size}"
+                    f" MV/m steps with {self.gmes_sleep_interval}s waits.")
+
+        # Walk step size until we're within a single step
+        while abs(gset - actual_gset) > self.gmes_step_size:
+            # Don't make a change unless we are sufficiently tuned
+            self.wait_for_tuning(tune_timeout=tune_timeout)
+
+            next_gset = actual_gset + (step_dir * self.gmes_step_size)
+
+            # Make a small step.  Do not wait the settle time, we do that at the end.
+            self._set_gradient(gset=next_gset, settle_time=0, **kwargs)
+            actual_gset = self.gset.get(use_monitor=False)
+            if self.gmes_sleep_interval > 0:
+                time.sleep(self.gmes_sleep_interval)
+
+        # We should be within a single step here.  Now wait the full settle time.
+        self._set_gradient(gset=gset, settle_time=settle_time, **kwargs)
+
+    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
+                     force: bool = False, gradient_epsilon: float = 0.05):
+        """Set a cavity's gradient and wait for supporting systems to compensate for the change.
+
+        New change can't be more than 1 MV/m away from current value, without force.  This attempts to wait for a cavity
+        to ramp if requested.  However, it also has a shortcut check that if the GMES is very close to the requested
+        GSET, then it will stop watching as the ramping is essentially over if it happened at all.
+
+        Args:
+            gset: The new value to set GSET to
+            settle_time: How long we need to wait for cryo system to adjust to change in heat load
+            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C100s ramp for larger steps.
+            ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
+            force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
+            gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
+
+        """
+        raise NotImplementedError("Must be implemented by child classes")
+
     def restore_pset(self):
         self.pset.put(self.pset_init, wait=True)
 
@@ -341,3 +373,291 @@ class Cavity:
             if not pv.connected:
                 if not pv.wait_for_connection(timeout=timeout):
                     raise Exception(f"PV {pv.pvname} failed to connect.")
+
+
+class LLRF1Cavity(Cavity):
+    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
+                 bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
+                 gset_max: float = None, gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
+        super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
+                         bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
+                         gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
+                         gmes_sleep_interval=gmes_sleep_interval)
+
+        self.rf_on = epics.PV(f"{self.epics_name}ACK1.B6", connection_callback=connection_cb)
+        self.tdeta = epics.PV(f"{self.epics_name}TDETA", connection_callback=connection_cb)
+
+        # P1 from microcontroller
+        self.fsd1 = epics.PV(f"{self.epics_name}STAT.B3", connection_callback=connection_cb)
+        self.fsd1.add_callback(get_threshold_cb(low=0, high=0))  # == 1 implies fault
+
+        # P1 from IOC
+        self.fsd2 = epics.PV(f"{self.epics_name}STAT.B4", connection_callback=connection_cb)
+        self.fsd2.add_callback(get_threshold_cb(low=0, high=0))  # == 1 implies fault
+
+        tdeta_n_suffix = ".N"
+        if config.get_parameter('testing'):
+            tdeta_n_suffix = "_N"
+        self.tdeta_n = epics.PV(f"{self.epics_name}TDETA{tdeta_n_suffix}", connection_callback=connection_cb)
+        self.gset_min = 3
+
+        if not self.bypassed:
+            self.rf_on.add_callback(rf_on_cb)
+
+        self.pv_list.append(self.rf_on)
+        self.pv_list.append(self.tdeta)
+        self.pv_list.append(self.tdeta_n)
+
+        # C25/C50 cavities don't seem to bother ramping in general.  The class defaults of 0.1 step with 0.01 sleeps
+        # means that it would take 1 second to ramp from 3 to 13 MV/m and check 100 times if the tuner is running.
+        # I think that should be sufficient to keep us from outpacing the tuners.
+
+    def is_rf_on(self):
+        """A simple method to determine if RF is on in a cavity"""
+        return self.rf_on.value == 1
+
+    def is_gradient_ramping(self, gmes_threshold: float = 0.3) -> bool:
+        """Determine if the cavity gradient is ramping to the target.
+
+        The approach is different for every cavity type.  As a fallback, check if gmes is "close" to gset.  Some
+        cavities are off by more 0.25 MV/m while others are within <0.1 MV/m.  The default tolerance has to be
+        surprisingly high because of this.
+
+        Args:
+            gmes_threshold: The minimum absolute difference between gmes and gset that indicates ramping.  Only used if
+                            no better way of checking for ramping is present.
+        """
+        if not self.is_rf_on():
+            raise RuntimeError(f"RF is off at {self.name}")
+
+        is_ramping = math.fabs(self.gmes.value - self.gset.value) > gmes_threshold
+        return is_ramping
+
+    def is_tuning_required(self):
+        # TODO: Figure out which PVs should be used
+        raise NotImplementedError("Waiting on feedback about which PVs to use.")
+        # return math.fabs(self.tdeta.value) > self.tdeta_n.value
+
+    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
+                     force: bool = False, gradient_epsilon: float = 0.05):
+        """Set a cavity's gradient and wait for supporting systems to compensate for the change.
+
+        New change can't be more than 1 MV/m away from current value, without force.  LLRF 1.0 cavities (C25/C50s) do
+        not ramp.  Typically, it doesn't seem to be needed, however it seems like it could still be possible to trip
+        something by accident.  Since we have the logic in place, just ramp them.
+
+        Args:
+            gset: The new value to set GSET to
+            settle_time: How long we need to wait for cryo system to adjust to change in heat load
+            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C100s ramp for larger steps.
+            ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
+            force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
+            gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
+
+        """
+
+        self._validate_requested_gradient(gset=gset, force=force)
+        self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
+                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+
+
+class LLRF2Cavity(Cavity):
+    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
+                 bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
+                 gset_max: float = None, gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
+        super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
+                         bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
+                         gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
+                         gmes_sleep_interval=gmes_sleep_interval)
+
+        # Define constants for this type of cavity
+        self.gset_min = 5
+
+        self.fccver = epics.PV(f"{self.epics_name}FCCVER", connection_callback=connection_cb)
+        self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
+        self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
+        self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
+        self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
+
+        # Detune in hertz
+        self.cfqe = epics.PV(f"{self.epics_name}CFQE", connection_callback=connection_cb)
+        # Max detune in hertz before tuner needs to be engaged
+        self.detahzhi = epics.PV(f"{self.epics_name}DETAHZHI", connection_callback=connection_cb)
+
+        self.pset_init = self.pset.get()
+        self.gset_init = self.gset.get()
+        self.fcc_firmware_version = self.fccver.get()
+        if self.fcc_firmware_version is None:
+            raise RuntimeError(f"{self.epics_name}: Could not get FCC Version")
+
+        # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
+        if not self.bypassed:
+            self.rf_on.add_callback(rf_on_cb)
+            # Only new LLRF 2.0 has this at 768
+            if self.fcc_firmware_version > 2019:
+                # If not 768, then we have an FSD being pulled.
+                self.fsd.add_callback(get_threshold_cb(low=768, high=768))
+
+        # List of all PVs related to a cavity.
+        self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd, self.fccver, self.cfqe,
+                                       self.detahzhi]
+
+        # Cavity can be effectively bypassed in a number of ways.  Work through that here.
+        self.bypassed_eff = bypassed
+        if self.gset_init == 0:
+            self.bypassed_eff = True
+        elif self.odvh.value == 0:
+            self.bypassed_eff = True
+
+        # Each cavity keeps track of an externally set maximum value.  Make sure to update this after connecting to PVs.
+        self.gset_max = self.gset_min
+        self.gset_max_requested = gset_max
+
+    def is_tuning_required(self) -> bool:
+        """Check if we are outside the bounds where the tuner should be active."""
+        return math.fabs(self.cfqe.value) >= self.detahzhi.value
+
+    def is_rf_on(self) -> bool:
+        """A simple method to determine if RF is on in a cavity"""
+        return self.rf_on.value == 1
+
+    def is_gradient_ramping(self, gmes_threshold: float = 0.2) -> bool:
+        """Determine if the cavity gradient is ramping to the target.
+
+        'Old' LLRF2.0 nicely provide a status bit.  'New' LLRF2.0 do not ramp (2022-11-22), but may one day soon.
+
+        Args:
+            gmes_threshold: The minimum absolute difference between gmes and gset that indicates ramping.  NOT USED.
+        """
+        if not self.is_rf_on():
+            raise RuntimeError(f"RF is off at {self.name}")
+
+        # For C100, the "is ramping" field is the 11th bit counting from zero.  If it's zero, then we're not
+        # ramping.  Otherwise, we're ramping.
+        is_ramping = int(self.stat1.value) & 0x0800 > 0
+        return is_ramping
+
+    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp: bool = True, ramp_timeout: float = 20,
+                     force: bool = False, gradient_epsilon: float = 0.05):
+        """Set a cavity's gradient and wait for supporting systems to compensate for the change.
+
+        New change can't be more than 1 MV/m away from current value, without force.  This attempts to wait for a cavity
+        to ramp if requested.  However, it also has a shortcut check that if the GMES is very close to the requested
+        GSET, then it will stop watching as the ramping is essentially over if it happened at all.
+
+        Args:
+            gset: The new value to set GSET to
+            settle_time: How long we need to wait for cryo system to adjust to change in heat load
+            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C100s ramp for larger steps.
+            ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
+            force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
+            gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
+
+        """
+
+        self._validate_requested_gradient(gset=gset, force=force)
+        if self.fcc_firmware_version > 2019:
+            # Newer firmware versions do not ramp the gradient and will trip if you move more than ~0.2 MV/m in a step
+            self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
+                                      ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+        else:
+            # Older firmware versions will ramp the gradient and handle tuning as they go
+            self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
+                               ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+
+
+class LLRF3Cavity(Cavity):
+    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
+                 bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
+                 gset_max: float = None, gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
+        super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
+                         bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
+                         gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
+                         gmes_sleep_interval=gmes_sleep_interval)
+        # Define constants for this type of cavity
+        self.gset_min = 5
+
+        # 1 = RF on, 0 = RF off
+        self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
+        self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
+        self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
+        self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
+
+        # Detune in hertz
+        self.cfqe = epics.PV(f"{self.epics_name}CFQE", connection_callback=connection_cb)
+        # Max detune in hertz before tuner needs to be engaged
+        self.detahzhi = epics.PV(f"{self.epics_name}DETAHZHI", connection_callback=connection_cb)
+
+        self.pset_init = self.pset.get()
+        self.gset_init = self.gset.get()
+
+        # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
+        if not self.bypassed:
+            self.rf_on.add_callback(rf_on_cb)
+
+        # List of all PVs related to a cavity.
+        self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd, self.cfqe, self.detahzhi]
+        self.pv_list = [pv for pv in self.pv_list if pv is not None]
+
+        # Cavity can be effectively bypassed in a number of ways.  Work through that here.
+        self.bypassed_eff = bypassed
+        if self.gset_init == 0:
+            self.bypassed_eff = True
+        elif self.odvh.value == 0:
+            self.bypassed_eff = True
+
+        # Each cavity keeps track of an externally set maximum value.  Make sure to update this after connecting to PVs.
+        self.gset_max = self.gset_min
+        self.gset_max_requested = gset_max
+
+    def is_rf_on(self):
+        """A simple method to determine if RF is on in a cavity"""
+        return self.rf_on.value == 1
+
+    def is_tuning_required(self):
+        """A check if the cavity detune has passed it's tuner activation threshold."""
+        if math.fabs(self.cfqe.value) > self.detahzhi.value:
+            return True
+        return False
+
+    def is_gradient_ramping(self, gmes_threshold: float = 0.3) -> bool:
+        """Determine if the cavity gradient is ramping to the target.
+
+        The approach is different for every cavity type.  As a fallback, check if gmes is "close" to gset.  Some
+        cavities are off by more 0.25 MV/m while others are within <0.1 MV/m.  The default tolerance has to be
+        surprisingly high because of this.
+
+        Args:
+            gmes_threshold: The minimum absolute difference between gmes and gset that indicates ramping.  Only used if
+                            no better way of checking for ramping is present.
+        """
+        if not self.is_rf_on():
+            raise RuntimeError(f"RF is off at {self.name}")
+
+        # For C75, the "is ramping" field is the 15th bit counting from zero.  If it's zero, then we're not
+        # ramping.  Otherwise, we're ramping.  (Per K. Hesse)
+        is_ramping = int(self.stat1.value) & 0x8000 > 0
+        return is_ramping
+
+    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
+                     force: bool = False, gradient_epsilon: float = 0.05):
+        """Set a cavity's gradient and wait for supporting systems to compensate for the change.
+
+        New change can't be more than 1 MV/m away from current value, without force.  This attempts to wait for a cavity
+        to ramp if requested.  However, it also has a shortcut check that if the GMES is very close to the requested
+        GSET, then it will stop watching as the ramping is essentially over if it happened at all.
+
+        Args:
+            gset: The new value to set GSET to
+            settle_time: How long we need to wait for cryo system to adjust to change in heat load
+            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C100s ramp for larger steps.
+            ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
+            force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
+            gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
+
+        """
+
+        self._validate_requested_gradient(gset=gset, force=force)
+        self.wait_for_tuning()
+        self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp, ramp_timeout=ramp_timeout,
+                           gradient_epsilon=gradient_epsilon)

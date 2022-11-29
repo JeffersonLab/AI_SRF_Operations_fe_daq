@@ -8,25 +8,31 @@ import logging
 
 import epics
 
-from src.fe_daq.cavity import Cavity
+from fe_daq.app_config import Config
+from fe_daq.cavity import Cavity, LLRF3Cavity, LLRF2Cavity
 
 # logging.basicConfig(level=logging.DEBUG)
 from src.fe_daq.linac import Zone, Linac
 
+def setUpModule():
+    Config.set_parameter("testing", True)
+
 logger = logging.getLogger()
 
 
-def get_cavity(controls_type='2.0'):
+def get_cavity(controls_type='2.0', style_2='old'):
     if controls_type == '2.0':
         linac = Linac("NorthLinac", prefix="adamc:")
         zone = Zone(name="1L22", linac=linac, controls_type='2.0')
-        cav = Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False, zone=zone,
+        cav = LLRF2Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False, zone=zone,
                      Q0=6e9)
+        if style_2 == 'old':
+            cav.fcc_firmware_version = 2018.0
         cav.update_gset_max()
     elif controls_type == '3.0':
         linac = Linac("NorthLinac", prefix="adamc:")
         zone = Zone(name="1L10", linac=linac, controls_type='3.0')
-        cav = Cavity(name="1L10-1", epics_name="adamc:R1A1", cavity_type="C75", length=0.4916, bypassed=False,
+        cav = LLRF3Cavity(name="1L10-1", epics_name="adamc:R1A1", cavity_type="C75", length=0.4916, bypassed=False,
                      zone=zone, Q0=6.3e9)
         cav.update_gset_max()
     else:
@@ -109,7 +115,8 @@ class TestCavity(TestCase):
         start = cav.gset_min + 3
         exp = [start - 1, start - 2, start - 2.5]
         cav.gset.add_callback(track_values_cb)
-        cav.walk_gradient(gset=cav.gset.value-2.5, settle_time=0.01, wait_for_ramp=False)
+        cav.walk_gradient(gset=cav.gset.value-2.5, settle_time=0.01, wait_for_ramp=False, step_size=1,
+                          wait_interval=0.1)
 
         with values_lock:
             result = values[cav.gset.pvname].copy()
@@ -149,36 +156,37 @@ class TestCavity(TestCase):
 
     def test_is_cavity_tuning(self):
         cav = get_cavity(controls_type='3.0')
-        deta_old = cav.deta.value
+        cfqe_old = cav.cfqe.value
         try:
-            cav.deta.put(40)
+            # Tuning threshold is set to 10 for test cases
+            cav.cfqe.put(40)
             time.sleep(0.1)
-            self.assertTrue(cav.is_cavity_tuning(max_deta=15))
+            self.assertTrue(cav.is_tuning_required())
             time.sleep(0.1)
-            cav.deta.put(0)
+            cav.cfqe.put(0)
             time.sleep(0.1)
-            self.assertFalse(cav.is_cavity_tuning(max_deta=15))
+            self.assertFalse(cav.is_tuning_required())
         finally:
-            cav.deta.put(deta_old)
+            cav.cfqe.put(cfqe_old)
 
     def test_set_gradient_tuning(self):
         cav = get_cavity(controls_type='3.0')
-        deta_old = cav.deta.value
+        cfqe_old = cav.cfqe.value
         gset_old = cav.gset.value
 
         def do_tune():
-            cav.deta.put(0)
+            cav.cfqe.put(0)
 
         tuning_time = 0.25
         try:
-            cav.deta.put(20)
+            cav.cfqe.put(20)
             start = datetime.now()
             threading.Timer(tuning_time, do_tune).start()
             cav.set_gradient(max(cav.gset_min, cav.gset.value-0.01), settle_time=0)
             end = datetime.now()
         finally:
             cav.gset.put(gset_old)
-            cav.deta.put(deta_old)
+            cav.cfqe.put(cfqe_old)
 
         self.assertTrue((end - start).total_seconds() > tuning_time, f"Cavity did not wait for tuning (<{tuning_time})")
 
