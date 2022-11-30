@@ -31,8 +31,7 @@ class TestCavity(TestCase):
     def test_config_multiple_threads(self):
         # Test that a change in one thread is seen back in another
         def _setter():
-            with config._CONFIG_LOCK:
-                config.set_parameter('thread-test',  'thread-test-val')
+            config.set_parameter('thread-test',  'thread-test-val')
 
         config.clear_config()
         t = Thread(target=_setter)
@@ -55,8 +54,12 @@ class TestCavity(TestCase):
         self.assertEqual(config.get_parameter(['testing', '13']), 'test-value')
 
     def test_config_set_multi_get_parameter_multi(self):
+        print("HERE")
         config.clear_config()
+        print("HERE")
         config.set_parameter('testing', {})
+        print("HERE")
         config.set_parameter(['testing', '13'], 'test-value')
+        print("HERE")
         self.assertEqual(config.get_parameter(['testing', '13']), 'test-value')
 
