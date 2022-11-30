@@ -64,23 +64,36 @@ def set_parameter(key: Union[str, List[str]], value: Any):
     global _CONFIG, _CONFIG_LOCK
     with _CONFIG_LOCK:
         if type(key) == str:
-            key = [key, ]
-        set_parameter(_CONFIG[key], value)
+            _CONFIG[key] = value
+        elif len(key) == 1:
+            _CONFIG[key[0]] = value
+        else:
+            _get_parameter(key[:-1])[key[-1]] = value
 
 
 def get_parameter(key: Union[str, List[str], None]) -> Any:
-    """Set an individual _CONFIG parameter.  If key is None, return entire dictionary."""
-    global _CONFIG, _CONFIG_LOCK
+    """Set an individual _CONFIG parameter.  If key is None, return entire dictionary.  Thread safe."""
+    global _CONFIG_LOCK
     with _CONFIG_LOCK:
-        if type(key) == str:
-            key = [key, ]
+        return _get_parameter(key)
 
-        out = None
-        try:
+
+def _get_parameter(key: Union[str, List[str], None]) -> Any:
+    """Set an individual config parameter.  If key is None, return entire dictionary.  Not thread safe, internal use."""
+    global _CONFIG, _CONFIG_LOCK
+    out = None
+    try:
+        if key is None:
+            out = _CONFIG
+        elif type(key) == str:
+            out = _CONFIG[key]
+        else:
             out = _get_from_dict(_CONFIG, key)
-        except KeyError:
-            logger.warning(f"Request for unknown config key '{'.'.join(key)}'")
-        return out
+    except KeyError:
+        # It's OK to request a parameter that doesn't exist, you get None back
+        pass
+
+    return out
 
 
 def validate_config():
