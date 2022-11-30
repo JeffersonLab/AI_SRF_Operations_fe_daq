@@ -113,7 +113,7 @@ class Cavity:
 
         # These dictate the defaults for walking a cavity.  Take steps of gmes_step_size and wait gmes_sleep_interval
         # seconds between steps.  Here we pick cautious defaults that child classes can override.
-        self.gmes_step_size = gmes_step_interval
+        self.gmes_step_size = gmes_step_size
         self.gmes_sleep_interval = gmes_sleep_interval
 
     def update_gset_max(self, gset_max: Optional[float] = None):
