@@ -103,6 +103,9 @@ def validate_config():
         'LLRF1_gmes_step_size', 'LLRF1_gmes_sleep_interval',
         'LLRF2_gmes_step_size', 'LLRF2_gmes_sleep_interval',
         'LLRF3_gmes_step_size', 'LLRF3_gmes_sleep_interval',
+        "linac_pressure_max", "linac_pressure_margin",
+        "jt_valve_position_max", "jt_valve_margin",
+        "cryo_heater_capacity_min", "cryo_heater_capacity_margin"
     ]
 
     with _CONFIG_LOCK:
