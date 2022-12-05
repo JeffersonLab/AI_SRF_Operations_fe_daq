@@ -112,3 +112,7 @@ def validate_config():
         for key in required:
             if key not in _CONFIG.keys():
                 raise RuntimeError(f"Configuration is missing '{key}")
+            # Check that all of these are floats / numbers
+            try:
+                if type(_CONFIG[key]) != float and type(_CONFIG[key]) != int:
+                raise ValueError(f"Required config parameter '{key}' is not numeric.  Received '{_CONFIG[key]}'")
