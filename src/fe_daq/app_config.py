@@ -97,22 +97,23 @@ def _get_parameter(key: Union[str, List[str], None]) -> Any:
 
 
 def validate_config():
-    """Make sure that a handful of required _CONFIG settings are present"""
+    """Make sure that a handful of required _CONFIG settings are present and of correct type."""
     global _CONFIG, _CONFIG_LOCK
     required = [
-        'LLRF1_gmes_step_size', 'LLRF1_gmes_sleep_interval',
-        'LLRF2_gmes_step_size', 'LLRF2_gmes_sleep_interval',
-        'LLRF3_gmes_step_size', 'LLRF3_gmes_sleep_interval',
-        "linac_pressure_max", "linac_pressure_margin",
-        "jt_valve_position_max", "jt_valve_margin",
-        "cryo_heater_capacity_min", "cryo_heater_capacity_margin"
+        ('LLRF1_gmes_step_size', float), ('LLRF1_gmes_sleep_interval', float), ('LLRF1_tuner_recovery_margin', float),
+        ('LLRF2_gmes_step_size', float), ('LLRF2_gmes_sleep_interval', float), ('LLRF2_tuner_recovery_margin', float),
+        ('LLRF3_gmes_step_size', float), ('LLRF3_gmes_sleep_interval', float), ('LLRF3_tuner_recovery_margin', float),
+        ("linac_pressure_max", float), ("linac_pressure_margin", float),
+        ("jt_valve_position_max", float), ("jt_valve_margin", float),
+        ("cryo_heater_capacity_min", float), ("cryo_heater_capacity_margin", float)
     ]
 
     with _CONFIG_LOCK:
-        for key in required:
+        for entry in required:
+            (key,typ) = entry
             if key not in _CONFIG.keys():
-                raise RuntimeError(f"Configuration is missing '{key}")
+                raise ValueError(f"Configuration is missing '{key}")
             # Check that all of these are floats / numbers
-            try:
-                if type(_CONFIG[key]) != float and type(_CONFIG[key]) != int:
-                raise ValueError(f"Required config parameter '{key}' is not numeric.  Received '{_CONFIG[key]}'")
+            if type(_CONFIG[key]) != typ:
+                raise ValueError(f"Required config parameter '{key}' is not required type '{typ}'."
+                                 f"  Received '{_CONFIG[key]}' of type '{type(_CONFIG[key])}'")
