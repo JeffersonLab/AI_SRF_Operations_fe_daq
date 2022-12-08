@@ -50,7 +50,6 @@ def get_hv_read_back_cb(target_hv: float, threshold: float = 0.15):
 def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) -> callable:
     """A generic callback generator for monitoring PVs that need to stay within a certain threshold."""
 
-    print(f"Adding callback {low} < PV < {high}")
     if low is None and high is None:
         raise ValueError("Either low or high must be specified")
     if low is not None and high is not None:
