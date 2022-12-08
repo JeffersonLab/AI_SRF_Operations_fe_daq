@@ -206,10 +206,24 @@ class TestStateMonitor(TestCase):
         # Create a cavity with supporting structure
         linac, zone, cav = create_linac_zone_cav()
         old_value = linac.linac_pressure.value
-        linac.linac_pressure.put(100, wait=True)
+
+        # Set too high
+        linac.linac_pressure.put(0.04, wait=True)
         time.sleep(0.01)
 
         try:
+            with self.assertRaises(Exception) as context:
+                StateMonitor.check_state(user_input=False)
+
+            # Set OK
+            linac.linac_pressure.put(0.0385, wait=True)
+            time.sleep(0.01)
+            StateMonitor.check_state(user_input=False)
+
+            # Set too low
+            linac.linac_pressure.put(0.037, wait=True)
+            time.sleep(0.01)
+
             with self.assertRaises(Exception) as context:
                 StateMonitor.check_state(user_input=False)
         finally:
