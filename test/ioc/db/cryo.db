@@ -12,12 +12,12 @@ record(ai, "adamc:CPI5107B") {
 
 # North Linac heater margin
 record(ai, "adamc:CAPHTRMGN") {
-    field(VAL, 2)
+    field(VAL, 5)
     field(PINI, "YES")
 }
 
 # South Linac heater margin
 record(ai, "adamc:CAPHTR2MGN") {
-    field(VAL, 2)
+    field(VAL, 5)
     field(PINI, "YES")
 }
