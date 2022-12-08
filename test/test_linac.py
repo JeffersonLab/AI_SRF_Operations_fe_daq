@@ -13,7 +13,25 @@ from fe_daq.linac import LinacFactory, Linac, Zone
 logger = logging.getLogger()
 
 def setUpModule():
-    config.set_parameter("testing", True)
+    config.parse_config_file(config.app_root + "/test/dummy_fe_daq.json")
+
+
+def get_linac_zone(linac_name, zone_name, controls_type):
+    config.validate_config()
+    lp_max = config.get_parameter('linac_pressure_max')
+    lp_recovery_margin = config.get_parameter('linac_pressure_margin')
+    heater_capacity_min = config.get_parameter('cryo_heater_margin_min')
+    heater_recover_margin = config.get_parameter('cryo_heater_margin_recovery_margin')
+    jt_max = config.get_parameter('jt_valve_position_max')
+    jt_recovery_margin = config.get_parameter('jt_valve_margin')
+
+    linac = Linac(linac_name, prefix="adamc:", linac_pressure_max=lp_max,
+                  linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
+                  heater_recovery_margin=heater_recover_margin)
+    zone = Zone(name=zone_name, linac=linac, controls_type=controls_type, jt_max=jt_max,
+                jt_recovery_margin=jt_recovery_margin)
+    linac.zones[zone_name] = zone
+    return linac, zone
 
 
 # This is a routine that should not be used with a real linac since it could overwhelm cryo and cause it to trip.
@@ -96,12 +114,13 @@ class TestLinacFactory(TestCase):
         lf = LinacFactory(testing=True)
 
         # Check that the segmask filtering works
-        linac = Linac("NorthLinac", prefix="adamc:")
+        linac, zone = get_linac_zone('NorthLinac', '1L11', '1.0')
+        linac.zones = {}
         lf._setup_zones(linac)
         lf._setup_cavities(linac)
 
         config.clear_config()
-        config.set_parameter('testing', True)
+        config.parse_config_file(config.app_root + "/test/dummy_fe_daq.json")
 
         self.assertEqual(linac.zones['1L19'].cavities['1L19-1'].name, '1L19-1')
         self.assertEqual(linac.cavities['1L19-1'].name, '1L19-1')
@@ -118,7 +137,8 @@ class TestLinacFactory(TestCase):
         lf = LinacFactory(testing=True)
 
         # Check that the segmask filtering works
-        linac = Linac("NorthLinac", prefix="adamc:")
+        linac, zone = get_linac_zone('NorthLinac', '1L11', '1.0')
+        linac.zones = {}
         lf._setup_zones(linac)
 
         self.assertEqual(linac.zones['1L19'].name, '1L19')
@@ -126,7 +146,8 @@ class TestLinacFactory(TestCase):
         self.assertTrue("2L10" not in linac.zones.keys())
 
         # Check that the zone_names filtering works
-        linac = Linac("NorthLinac", prefix="adamc:")
+        linac, zone = get_linac_zone('NorthLinac', '1L11', '1.0')
+        linac.zones = {}
         lf._setup_zones(linac, zone_names=['1L19'])
 
         self.assertEqual(linac.zones['1L19'].name, '1L19')
@@ -144,9 +165,7 @@ class TestLinacFactory(TestCase):
 class TestLinac(TestCase):
 
     def test_add_cavity(self):
-        linac = Linac("NorthLinac", prefix="adamc:")
-        zone = Zone(name='1L11', linac=linac, controls_type='1.0')
-        linac.zones[zone.name] = zone
+        linac, zone = get_linac_zone('NorthLinac', '1L11', '1.0')
         cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
                         Q0=6e9)
 
@@ -172,15 +191,11 @@ class TestLinac(TestCase):
             ndxd.update_background()
 
         for ndxd in linac.ndx_detectors.values():
-            # print(ndxd.name)
-            # print(ndxd.gamma_measurements, ndxd.gamma_background)
-            # print(ndxd.neutron_measurements, ndxd.neutron_background)
             self.assertEqual(num_samples, len(ndxd.gamma_measurements),
                              f"{ndxd.name}: gamma measurement length wrong. {ndxd.gamma_measurements}")
             self.assertEqual(num_samples, len(ndxd.neutron_measurements),
                              f"{ndxd.name}: neutron measurement length wrong. {ndxd.neutron_measurements}")
             is_rad, t_stat = ndxd.is_radiation_above_background()
-            # print(t_stat)
             self.assertFalse(is_rad,
                              f"{ndxd.name}: Rad too high, g_t: {ndxd.get_gamma_t_stat()},"
                              f" n_t: {ndxd.get_neutron_t_stat()}")
@@ -191,10 +206,6 @@ class TestLinac(TestCase):
         linac.get_radiation_measurements(num_samples)
 
         for ndxd in linac.ndx_detectors.values():
-            # print(ndxd.name)
-            # print(ndxd.gamma_measurements, ndxd.gamma_background)
-            # print(ndxd.neutron_measurements, ndxd.neutron_background)
-
             self.assertEqual(num_samples, len(ndxd.gamma_measurements),
                              f"{ndxd.name}: gamma measurement length wrong. {ndxd.gamma_measurements}")
             self.assertEqual(num_samples, len(ndxd.neutron_measurements),
@@ -208,11 +219,9 @@ class TestLinac(TestCase):
 class TestZone(TestCase):
 
     def test_add_cavity(self):
-        linac = Linac("NorthLinac", prefix="adamc:")
-        zone = Zone(name='1L11', linac=linac, controls_type='1.0')
-        linac.zones[zone.name] = zone
-        cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                        Q0=6e9)
+        linac, zone = get_linac_zone("NorthLinac", '1L11', '1.0')
+        cavity = Cavity.get_cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True,
+                                   zone=zone, Q0=6e9)
 
         # Test that the cavity is missing
         self.assertFalse(cavity.name in linac.cavities.keys())
@@ -224,9 +233,7 @@ class TestZone(TestCase):
         self.assertTrue(cavity.name in linac.zones['1L11'].cavities.keys())
 
     def test_check_percent_heat_change(self):
-        linac = Linac("NorthLinac", prefix="adamc:")
-        zone = Zone(name='1L11', linac=linac, controls_type='1.0')
-        linac.zones[zone.name] = zone
+        linac, zone = get_linac_zone('NorthLinac', '1L11', '1.0')
         zone.add_cavity(
             Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
                    Q0=6e9))
