@@ -22,6 +22,15 @@ record(ao, "adamc:R$(A)PSET") {
     field(PINI, "YES")
 }
 
+# C25/C50 info on cavity faults
+#record(ai, "adamc:R$(A)STAT") {
+record(mbbiDirect,"adamc:R$(A)STAT") {
+    field(VAL, 0)
+    field(PINI, "YES")
+}
+
+
+# C100 info gradient ramping
 record(ai, "adamc:R$(A)STAT1") {
     field(VAL, 0)
     field(PINI, "YES")
@@ -32,8 +41,30 @@ record(ai, "adamc:R$(A)DETA") {
     field(PINI, "YES")
 }
 
+# LLRF 1.0 Tuning PVs
+record(ai, "adamc:R$(A)TDETA") {
+    field(VAL, 0)
+    field(PINI, "YES")
+}
 
-# RF On PV
+# LLRF 1.0 Tuning PVs
+record(ai, "adamc:R$(A)TDETA_N") {
+    field(VAL, 10)
+    field(PINI, "YES")
+}
+
+# LLRF 2.0/3.0 Tuning PVs
+record(ai, "adamc:R$(A)CFQE") {
+    field(VAL, 0)
+    field(PINI, "YES")
+}
+record(ai, "adamc:R$(A)DETAHZHI") {
+    field(VAL, 10)
+    field(PINI, "YES")
+}
+
+
+# New LLRF 2.0 "Was FSD raised?" PV
 # 12 GeV style controls
 record(ao, "adamc:R$(A)FBRIO") {
     field(VAL, 768)
@@ -41,7 +72,7 @@ record(ao, "adamc:R$(A)FBRIO") {
 }
 
 record(ao, "adamc:R$(A)FCCVER") {
-    field(VAL, 2021)
+    field(VAL, 2021.0)
     field(PINI, "YES")
 }
 
