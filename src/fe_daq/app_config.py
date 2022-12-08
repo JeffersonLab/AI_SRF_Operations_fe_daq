@@ -116,7 +116,7 @@ def validate_config():
         ('LLRF1_gmes_step_size', float), ('LLRF1_gmes_sleep_interval', float), ('LLRF1_tuner_recovery_margin', float),
         ('LLRF2_gmes_step_size', float), ('LLRF2_gmes_sleep_interval', float), ('LLRF2_tuner_recovery_margin', float),
         ('LLRF3_gmes_step_size', float), ('LLRF3_gmes_sleep_interval', float), ('LLRF3_tuner_recovery_margin', float),
-        ("linac_pressure_max", float), ("linac_pressure_margin", float),
+        ("linac_pressure_min", float), ("linac_pressure_max", float), ("linac_pressure_margin", float),
         ("jt_valve_position_max", float), ("jt_valve_margin", float),
         ("cryo_heater_margin_min", float), ("cryo_heater_margin_recovery_margin", float)
     ]
