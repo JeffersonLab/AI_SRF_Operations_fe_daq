@@ -32,6 +32,9 @@ class NDXElectrometer:
             raise RuntimeError(
                 f"{self.name} HV set point {self.hv_set_point.pvname} = {self.hv_set_point.value} (!= {target_hv})")
 
+        self.pv_list = [self.capacitor_switch, self.daq_enabled, self.integration_period, self.hv_set_point,
+                        self.hv_read_back]
+
     def toggle_data_acquisition(self):
         # Toggle the DAQ off and back on.  There are some circumstances where it may be in "Acquire" mode according to
         # EPICS, but not actually acquiring.
@@ -59,6 +62,14 @@ class NDXElectrometer:
 
         self.toggle_data_acquisition()
 
+    def wait_for_connections(self, timeout: float = 2.0):
+        """Wait for all of the PVs associated with this Zone to connect.  Raise exception if that doesn't happen."""
+        # Ensure that we are connected
+        for pv in self.pv_list:
+            if not pv.connected:
+                if not pv.wait_for_connection(timeout=timeout):
+                    raise Exception(f"PV {pv.pvname} failed to connect.")
+
 
 class NDXDetector:
 
@@ -75,6 +86,8 @@ class NDXDetector:
 
         self.gamma_measurements = []
         self.neutron_measurements = []
+
+        self.pv_list = [self.gamma_current, self.neutron_current]
 
     def update_background(self) -> None:
         """Copies current measurement history to the data representing background radiation."""
@@ -120,3 +133,11 @@ class NDXDetector:
     def get_neutron_t_stat(self):
         t, p = ttest_ind(self.neutron_measurements, self.neutron_background, equal_var=False)
         return t
+
+    def wait_for_connections(self, timeout: float = 2.0):
+        """Wait for all of the PVs associated with this object to connect.  Raise exception if that doesn't happen."""
+        # Ensure that we are connected
+        for pv in self.pv_list:
+            if not pv.connected:
+                if not pv.wait_for_connection(timeout=timeout):
+                    raise Exception(f"PV {pv.pvname} failed to connect.")

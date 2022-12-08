@@ -49,6 +49,8 @@ def get_hv_read_back_cb(target_hv: float, threshold: float = 0.15):
 
 def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) -> callable:
     """A generic callback generator for monitoring PVs that need to stay within a certain threshold."""
+
+    print(f"Adding callback {low} < PV < {high}")
     if low is None and high is None:
         raise ValueError("Either low or high must be specified")
     if low is not None and high is not None:
@@ -70,6 +72,7 @@ def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) 
 
         if not is_low and not is_high:
             StateMonitor.threshold_recovered(pvname=pvname)
+            logger.info(f"{pvname} is within threshold ({low} < {value}  < {high})")
         elif is_low:
             StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=low, kind='<')
             logger.error(f"{pvname} is below threshold ({value} < {low})")
@@ -156,6 +159,7 @@ __threshold_exceeded: {ascii(cls.__threshold_exceeded)}"""
         """Track when a PV's threshold has been exceeded."""
         with cls.__state_lock:
             cls.__threshold_exceeded[pvname] = (threshold, value, kind)
+            logger.info(f"{pvname} exceed threshold ({value} {kind} {threshold}).")
 
     @classmethod
     def threshold_recovered(cls, pvname: str) -> None:

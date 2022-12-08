@@ -21,21 +21,27 @@ class Cavity:
         if zone.controls_type == '1.0':
             gmes_step_size = config.get_parameter('LLRF1_gmes_step_size')
             gmes_sleep_interval = config.get_parameter('LLRF1_gmes_sleep_interval')
+            tuner_recovery_margin = config.get_parameter('LLRF1_tuner_recovery_margin')
             cavity = LLRF1Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                               bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
-                               gset_max=gset_max, gmes_step_size=gmes_step_size, gmes_sleep_interval=gmes_sleep_interval)
+                                 bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
+                                 gset_fe_onset=gset_fe_onset, gset_max=gset_max, gmes_step_size=gmes_step_size,
+                                 gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
         elif zone.controls_type == '2.0':
             gmes_step_size = config.get_parameter('LLRF2_gmes_step_size')
             gmes_sleep_interval = config.get_parameter('LLRF2_gmes_sleep_interval')
+            tuner_recovery_margin = config.get_parameter('LLRF2_tuner_recovery_margin')
             cavity = LLRF2Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                               bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
-                               gset_max=gset_max, gmes_step_size=gmes_step_size, gmes_sleep_interval=gmes_sleep_interval)
+                                 bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
+                                 gset_fe_onset=gset_fe_onset, gset_max=gset_max, gmes_step_size=gmes_step_size,
+                                 gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
         elif zone.controls_type == '3.0':
             gmes_step_size = config.get_parameter('LLRF3_gmes_step_size')
             gmes_sleep_interval = config.get_parameter('LLRF3_gmes_sleep_interval')
+            tuner_recovery_margin = config.get_parameter('LLRF3_tuner_recovery_margin')
             cavity = LLRF3Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                               bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
-                               gset_max=gset_max, gmes_step_size=gmes_step_size, gmes_sleep_interval=gmes_sleep_interval)
+                                 bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
+                                 gset_fe_onset=gset_fe_onset, gset_max=gset_max, gmes_step_size=gmes_step_size,
+                                 gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
         else:
             raise ValueError(f"Unsupported controls_type '{zone.controls_type}")
 
@@ -47,7 +53,7 @@ class Cavity:
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
                  bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
                  gset_max: float = None, gset_min: float = None, gmes_step_size: float = 0.1,
-                 gmes_sleep_interval: float = 1):
+                 gmes_sleep_interval: float = 1, tuner_recovery_margin: float = 1.0):
         self.name = name
         self.epics_name = epics_name
         self.zone_name = zone.name
@@ -58,6 +64,7 @@ class Cavity:
         self.zone = zone
         self.Q0 = Q0
         self.cavity_number = int(name[5:6])
+        self.tuner_recovery_margin = tuner_recovery_margin
 
         # This is a higher gradient where we have found no field emission.  Typically it is the highest integer MV/m
         # that does not produce a radiation signal. Useful as a baseline "high" gradient with some wiggle room from FE.
@@ -140,7 +147,10 @@ class Cavity:
         raise NotImplementedError("Must be implemented by child classes")
 
     def wait_for_tuning(self, tune_timeout: float = 60):
-        """Method that waits for a cavity to be brought back within tune limits.  No Waiting if no tuning required."""
+        """Method that waits for a cavity to be brought back within tune limits.  No Waiting if no tuning required.
+
+        THis uses the global state monitor and prompts for user interaction for any problem anywhere.
+        """
         start_ramp = datetime.now()
         needed_tuning = False
         while self.is_tuning_required():
@@ -157,6 +167,23 @@ class Cavity:
                     raise RuntimeError(msg)
                 # Restart the counter by pretending we just started to tune
                 start_ramp = datetime.now()
+
+        if needed_tuning:
+            logger.info(f"{self.name}: Done tuning")
+
+    def _wait_for_tuning(self, timeout: float):
+        """Check the status of the tuners and wait at most timeout seconds if tuning is required"""
+        start_ramp = datetime.now()
+        needed_tuning = False
+        margin = 0
+        while self.is_tuning_required(margin=margin):
+            margin = self.tuner_recovery_margin
+            needed_tuning = True
+            logger.info(f"{self.name}: Waiting {timeout} seconds for tuner to finish")
+            time.sleep(0.05)
+            if (datetime.now() - start_ramp).total_seconds() > timeout:
+                logger.warning(f"{self.name} timed out waiting for tuner.")
+                raise RuntimeError(f"{self.name} tuner timed out")
 
         if needed_tuning:
             logger.info(f"{self.name}: Done tuning")
@@ -296,6 +323,68 @@ class Cavity:
         logger.info(f"{self.name} Waiting {settle_time} seconds for cryo to adjust")
         StateMonitor.monitor(duration=settle_time)
 
+    def _wait_for_jt(self, timeout: float):
+        """ Check to see if JT valve is too open.  Wait for it to recover if so.
+
+        Raises RuntimeError upon timeout.
+        """
+        jt_recovery_point = self.zone.jt_max - self.zone.jt_recovery_margin
+
+        wait_for_jt, jt_position = self.zone.check_jt_valve()
+        if wait_for_jt:
+            logger.warning(f"{self.name}: Found JT Valve too open. {self.zone.jt_stroke.pvname}={jt_position}."
+                           f"Waiting max {timeout} seconds to recover to {jt_recovery_point}.")
+        start = datetime.now()
+        while wait_for_jt:
+            time.sleep(0.01)
+            wait_for_jt, jt_position = self.zone.check_jt_valve(threshold=jt_recovery_point)
+            if not wait_for_jt:
+                logger.info(f"{self.name}: JT valve recovered to {jt_position}")
+            if (datetime.now() - start).total_seconds() > timeout:
+                logger.warning(f"{self.name}: JT valve unrecovered. {self.zone.jt_stroke.pvname}={jt_position}.")
+                raise RuntimeError("Timed out waiting for JT Valve")
+
+    def _wait_for_linac_pressure(self, timeout: float):
+        """Check to see if linac pressure is too high.  Wait for it too recover if so.
+
+        Raises RuntimeError upon timeout.
+        """
+        lp_recovery_point = self.zone.linac.linac_pressure_max - self.zone.linac.lp_recovery_margin
+        wait_for_linac_pressure, linac_pressure = self.zone.linac.check_linac_pressure()
+        if wait_for_linac_pressure:
+            logger.warning(f"{self.name}: Found linac pressure too high. {self.zone.linac.linac_pressure.pvname}="
+                           f"{linac_pressure}.  Waiting max {timeout} seconds to recover to"
+                           f" {lp_recovery_point}.")
+        start = datetime.now()
+        while wait_for_linac_pressure:
+            time.sleep(0.01)
+            wait_for_linac_pressure, linac_pressure = self.zone.linac.check_linac_pressure(threshold=lp_recovery_point)
+            if not wait_for_linac_pressure:
+                logger.info(f"{self.name}: Linac pressure recovered to {linac_pressure}")
+            elif (datetime.now() - start).total_seconds() > timeout:
+                logger.warning(f"{self.name}: JT valve unrecovered. {self.zone.linac.linac_pressure.pvname}"
+                               f"={linac_pressure}.")
+                raise RuntimeError("Timed out waiting for JT Valve")
+
+    def _wait_for_heater_margins(self, timeout: float):
+        """Check if we have enough heater margin.  If not, wait for it to recover.  Raise on timeout."""
+        hm_recovery_point = self.zone.linac.heater_margin_min + self.zone.linac.heater_recovery_margin
+        wait_for_heaters, heater_margin = self.zone.linac.check_heater_margin()
+        if wait_for_heaters:
+            logger.warning(f"{self.name}: Found heater margin too low. {self.zone.linac.heater_margin.pvname}="
+                           f"{heater_margin}.  Waiting max {timeout} seconds to recover to"
+                           f" {hm_recovery_point}.")
+        start = datetime.now()
+        while wait_for_heaters:
+            time.sleep(0.01)
+            wait_for_heaters, heater_margin = self.zone.linac.check_heater_margin(threshold=hm_recovery_point)
+            if not wait_for_heaters:
+                logger.info(f"{self.name}: Heater margin recovered to {heater_margin}")
+            elif (datetime.now() - start).total_seconds() > timeout:
+                logger.warning(f"{self.name}: Heater margin unrecovered. {self.zone.linac.heater_margin.pvname}"
+                               f"={heater_margin}.")
+                raise RuntimeError("Timed out waiting for heater margin")
+
     def _do_gradient_ramping(self, gset: float, settle_time: float, tune_timeout: float = 60, **kwargs):
         """Slow ramp gradient to a new values.  Not all cavities allow time for tuners on a gset caput.
 
@@ -316,8 +405,11 @@ class Cavity:
 
         # Walk step size until we're within a single step
         while abs(gset - actual_gset) > self.gmes_step_size:
-            # Don't make a change unless we are sufficiently tuned
+            # Don't make a change unless we are sufficiently tuned and cryo is happy.  These raise on timeout
             self.wait_for_tuning(tune_timeout=tune_timeout)
+            self._wait_for_jt(timeout=60)
+            self._wait_for_linac_pressure(timeout=60)
+            self._wait_for_heater_margins(timeout=60)
 
             next_gset = actual_gset + (step_dir * self.gmes_step_size)
 
@@ -377,12 +469,13 @@ class Cavity:
 
 class LLRF1Cavity(Cavity):
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
-                 bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
-                 gset_max: float = None, gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
+                 bypassed: bool, zone: 'Zone', Q0: float, tuner_recovery_margin: float,
+                 gset_no_fe: float = None, gset_fe_onset: float = None, gset_max: float = None,
+                 gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
         super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
                          bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
                          gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
-                         gmes_sleep_interval=gmes_sleep_interval)
+                         gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
 
         self.rf_on = epics.PV(f"{self.epics_name}ACK1.B6", connection_callback=connection_cb)
         self.tdeta = epics.PV(f"{self.epics_name}TDETA", connection_callback=connection_cb)
@@ -408,9 +501,6 @@ class LLRF1Cavity(Cavity):
         self.pv_list.append(self.tdeta)
         self.pv_list.append(self.tdeta_n)
 
-        # C25/C50 cavities don't seem to bother ramping in general.  The class defaults of 0.1 step with 0.01 sleeps
-        # means that it would take 1 second to ramp from 3 to 13 MV/m and check 100 times if the tuner is running.
-        # I think that should be sufficient to keep us from outpacing the tuners.
 
     def is_rf_on(self):
         """A simple method to determine if RF is on in a cavity"""
@@ -434,9 +524,12 @@ class LLRF1Cavity(Cavity):
         return is_ramping
 
     def is_tuning_required(self):
-        # TODO: Figure out which PVs should be used
-        raise NotImplementedError("Waiting on feedback about which PVs to use.")
-        # return math.fabs(self.tdeta.value) > self.tdeta_n.value
+        """Check if tuning is required.
+
+        Note the tuners may be running even when not 'required' as they start when required, but then run down to a
+        lower level to give more margin for detuning.
+        """
+        return math.fabs(self.tdeta.value) > self.tdeta_n.value
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
                      force: bool = False, gradient_epsilon: float = 0.05):
@@ -462,13 +555,13 @@ class LLRF1Cavity(Cavity):
 
 
 class LLRF2Cavity(Cavity):
-    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
+    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,  tuner_recovery_margin: float,
                  bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
                  gset_max: float = None, gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
         super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
                          bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
                          gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
-                         gmes_sleep_interval=gmes_sleep_interval)
+                         gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
 
         # Define constants for this type of cavity
         self.gset_min = 5
@@ -490,13 +583,17 @@ class LLRF2Cavity(Cavity):
         if self.fcc_firmware_version is None:
             raise RuntimeError(f"{self.epics_name}: Could not get FCC Version")
 
-        # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
+        # Attach a callback that watches for RF to turn off or for faults.  Don't watch RF if the cavity is
+        # bypassed.
         if not self.bypassed:
             self.rf_on.add_callback(rf_on_cb)
             # Only new LLRF 2.0 has this at 768
-            if self.fcc_firmware_version > 2019:
+            if self.fcc_firmware_version >= 2021:
                 # If not 768, then we have an FSD being pulled.
                 self.fsd.add_callback(get_threshold_cb(low=768, high=768))
+            elif self.fcc_firmware_version < 2021:
+                # If not 972, then we have an FSD being pulled.
+                self.fsd.add_callback(get_threshold_cb(low=972, high=972))
 
         # List of all PVs related to a cavity.
         self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd, self.fccver, self.cfqe,
@@ -567,13 +664,13 @@ class LLRF2Cavity(Cavity):
 
 
 class LLRF3Cavity(Cavity):
-    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
+    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float, tuner_recovery_margin: float,
                  bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
                  gset_max: float = None, gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
         super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
                          bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
                          gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
-                         gmes_sleep_interval=gmes_sleep_interval)
+                         gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
         # Define constants for this type of cavity
         self.gset_min = 5
 
@@ -594,6 +691,9 @@ class LLRF3Cavity(Cavity):
         # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
         if not self.bypassed:
             self.rf_on.add_callback(rf_on_cb)
+
+        # Monitor the FSD in the global state monitor
+        self.fsd.add_callback(get_threshold_cb(low=768, high=768))
 
         # List of all PVs related to a cavity.
         self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd, self.cfqe, self.detahzhi]

@@ -1,5 +1,6 @@
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
@@ -18,12 +19,18 @@ test_prefix = "adamc:"
 
 
 class Linac:
-    def __init__(self, name: str, prefix: str):
+    def __init__(self, name: str, prefix: str, linac_pressure_max: float,
+                 linac_pressure_recovery_margin: float, heater_margin_min: float, heater_recovery_margin: float):
         self.name = name
         self.zones = {}
         self.cavities = {}
         self.ndx_detectors = {}
         self.ndx_electrometers = {}
+        self.epics_lock = threading.Lock()
+        self.linac_pressure_max = linac_pressure_max
+        self.lp_recovery_margin = linac_pressure_recovery_margin
+        self.heater_margin_min = heater_margin_min
+        self.heater_recovery_margin = heater_recovery_margin
 
         if name == "NorthLinac":
             self.linac_pressure = epics.PV(f"{prefix}CPI4107B", connection_callback=connection_cb)
@@ -36,8 +43,58 @@ class Linac:
 
         # We need to watch and make sure that we don't exceed linac pressure or heater margin requirements for stable
         # operations.
-        self.linac_pressure.add_callback(get_threshold_cb(high=0.039))  # Nominal linac pressure is 0.0385.
-        self.heater_margin.add_callback(get_threshold_cb(low=1.01))  # We want margin > 1
+        self.linac_pressure.add_callback(get_threshold_cb(high=self.linac_pressure_max))  # Nominal linac pressure is 0.0385.
+        print(f"Adding callback for {self.heater_margin.pvname}")
+        self.heater_margin.add_callback(get_threshold_cb(low=self.heater_margin_min))  # We want margin > 1
+
+        self.pv_list = [self.linac_pressure, self.heater_margin]
+
+    def wait_for_connections(self, timeout: float = 2.0):
+        """Wait for all of the PVs associated with this Linac to connect.  Raise exception if that doesn't happen."""
+        # Ensure that we are connected
+        for pv in self.pv_list:
+            if not pv.connected:
+                if not pv.wait_for_connection(timeout=timeout):
+                    raise Exception(f"PV {pv.pvname} failed to connect.")
+
+
+    def check_linac_pressure(self, threshold: Optional[float] = None) -> Tuple[bool, float]:
+        """Check that the linac pressue is not too high.  Use self.linac_pressure_max if threshold is None.
+
+        Thread-safe.
+        """
+        maximum = threshold
+        if threshold is None:
+            if self.linac_pressure_max is None:
+                raise RuntimeError("No max value given for jt valve position, and default is None.")
+            maximum = self.linac_pressure_max
+
+        # Not sure that we need to synchronize here, but it's better safe than sorry.
+        with self.epics_lock:
+            value = self.linac_pressure.value
+        above = False
+        if value >= maximum:
+            above = True
+
+        return above, value
+
+    def check_heater_margin(self, threshold: Optional[float] = None) -> Tuple[bool, float]:
+        """Check that the heater margin is not too low.  Use self. if threshold is None.  Thread-safe."""
+        minimum = threshold
+        if threshold is None:
+            if self.linac_pressure_max is None:
+                raise RuntimeError("No max value given for jt valve position, and default is None.")
+            minimum = self.heater_margin_min
+
+        # Not sure that we need to synchronize here, but it's better safe than sorry.
+        with self.epics_lock:
+            value = self.linac_pressure.value
+        above = False
+        if value <= minimum:
+            above = True
+
+        return above, value
+
 
     def add_cavity(self, cavity: Cavity):
         """Add a cavity to a linac and it's zone as needed"""
@@ -146,10 +203,17 @@ class Linac:
 
 
 class Zone:
-    def __init__(self, name: str, linac: Linac, controls_type: str, prefix: str = "", jt_suffix: str = ".ORBV"):
+    def __init__(self, name: str, linac: Linac, controls_type: str, jt_max: float, prefix: str = "",
+                 jt_suffix: str = ".ORBV", jt_recovery_margin: float = 2):
         self.name = name
         self.linac = linac
         self.cavities = {}
+        self.epics_lock = threading.Lock()
+
+        # J. Benesch suggest value for maximum OK JT valves position.  Beyond which we stop doing anything and see what
+        # has gone awry.
+        self.jt_max = jt_max
+        self.jt_recovery_margin = jt_recovery_margin
 
         supported_controls = ('1.0', '2.0', '3.0')
         if controls_type not in supported_controls:
@@ -159,7 +223,9 @@ class Zone:
         # The JT strove PV is normally a ORBV field which is a read only field.  During testing we work with the VAL
         # field.
         self.jt_stroke = epics.PV(f"{prefix}CEV{name}JT{jt_suffix}", connection_callback=connection_cb)
-        self.jt_stroke.add_callback(callback=get_threshold_cb(high=92))
+        self.jt_stroke.add_callback(callback=get_threshold_cb(high=self.jt_max))
+
+        self.pv_list = [self.jt_stroke]
 
     def add_cavity(self, cavity: Cavity):
         # Add the cavity to the zone if needed
@@ -190,6 +256,30 @@ class Zone:
                                f"({round(rel_change, 1)}%)")
 
         return rel_change, new_heat, old_heat
+
+    def check_jt_valve(self, threshold: Optional[float] = None) -> Tuple[bool, float]:
+        """Check if the JT valve is beyond the given threshold.  If None, use self.jt_max.  Thread-safe."""
+        with self.epics_lock:
+            maximum = threshold
+            if threshold is None:
+                if self.jt_max is None:
+                    raise RuntimeError("No max value given for jt valve position, and default is None.")
+                maximum = self.jt_max
+
+            value = self.jt_stroke.value
+            above = False
+            if value >= maximum:
+                above = True
+
+            return above, value
+
+    def wait_for_connections(self, timeout: float = 2.0):
+        """Wait for all of the PVs associated with this Zone to connect.  Raise exception if that doesn't happen."""
+        # Ensure that we are connected
+        for pv in self.pv_list:
+            if not pv.connected:
+                if not pv.wait_for_connection(timeout=timeout):
+                    raise Exception(f"PV {pv.pvname} failed to connect.")
 
     # def set_gradients(self, exclude_cavs: List[Cavity] = None, level: str = "low") -> None:
     #     """Set the cavity gradients high/low for cavities in the zone, optionally excluding some cavities
@@ -259,10 +349,17 @@ class LinacFactory:
         Segmask name format  is NorthLinac, SouthLinac.
         """
 
-        linac = Linac(name, prefix=self.pv_prefix)
+        linac = Linac(name, prefix=self.pv_prefix, linac_pressure_max=config.get_parameter("linac_pressure_max"),
+                      linac_pressure_recovery_margin=config.get_parameter("linac_pressure_margin"),
+                      heater_margin_min=config.get_parameter("cryo_heater_margin_min"),
+                      heater_recovery_margin=config.get_parameter("cryo_heater_margin_recovery_margin"))
         self._setup_zones(linac=linac, zone_names=zone_names)
         self._setup_cavities(linac)
         self._setup_ndx(linac, electrometer_names=electrometer_names, detector_names=detector_names)
+
+        # Make sure that the linac PVs connect.  The _setup_* methods should do the same.
+        linac.wait_for_connections()
+
         return linac
 
     def _setup_zones(self, linac, zone_names: List[str] = None) -> None:
@@ -282,7 +379,12 @@ class LinacFactory:
                     if zone_name not in linac.zones.keys():
                         # Add a zone if we haven't seen this before.
                         linac.zones[zone_name] = Zone(name=zone_name, linac=linac, controls_type=controls_type,
-                                                      prefix=self.pv_prefix, jt_suffix=self.jt_suffix)
+                                                      prefix=self.pv_prefix, jt_suffix=self.jt_suffix,
+                                                      jt_max=config.get_parameter("jt_valve_position_max"),
+                                                      jt_recovery_margin=config.get_parameter("jt_valve_margin"))
+
+        for zone in linac.zones.values():
+            zone.wait_for_connections()
 
     def _setup_cavities(self, linac: Linac, no_fe_file="./cfg/no_fe.tsv", fe_onset_file="./cfg/fe_onset.tsv") -> None:
         """Creates cavities from CED data and adds to linac and zone.  Expects _setup_zones to have been run."""
@@ -360,6 +462,12 @@ class LinacFactory:
                             logger.info(f"Adding {name} to {linac.name}'s NDX detectors")
                             linac.ndx_detectors[d] = NDXDetector(name=d, epics_name=f"{self.pv_prefix}{d}",
                                                                  electrometer=ndxe)
+
+            for electrometer in linac.ndx_electrometers.values():
+                electrometer.wait_for_connections()
+
+            for detector in linac.ndx_detectors.values():
+                detector.wait_for_connections()
 
     @staticmethod
     def _get_ced_elements(ced_url: str) -> List[Dict]:
