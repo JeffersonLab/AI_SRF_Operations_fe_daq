@@ -40,7 +40,20 @@ def parse_config_file(filename: str = f"{app_root}/fe_daq.cfg"):
         try:
             with open(filename, mode="r") as f:
                 # This will choke if a line has a comment after some content.  Comments MUST be on their own line.
-                jsondata = ''.join(line.strip() for line in f if not line.strip().startswith('#'))
+                lines = []
+
+                # Process each line, skip empty ones or comments.
+                for line in f:
+                    line = line.strip()
+                    if len(line) == 0:
+                        continue
+                    if line.startswith('#'):
+                        continue
+                    lines.append(line)
+
+                # Put all of the lines together with newlines for easy debug readability
+                jsondata = '\n'.join(lines)
+
         except Exception as exc:
             logger.error(f"Error reading file '{filename}': {exc}")
             raise exc
@@ -48,7 +61,7 @@ def parse_config_file(filename: str = f"{app_root}/fe_daq.cfg"):
         try:
             _CONFIG = json.loads(jsondata)
         except Exception as exc:
-            logger.error(f"Error parsing _CONFIG file '{filename}': ")
+            logger.error(f"Error parsing _CONFIG file '{filename}': {exc}")
             raise exc
 
 
@@ -110,7 +123,7 @@ def validate_config():
 
     with _CONFIG_LOCK:
         for entry in required:
-            (key,typ) = entry
+            (key, typ) = entry
             if key not in _CONFIG.keys():
                 raise ValueError(f"Configuration is missing '{key}")
             # Check that all of these are floats / numbers
