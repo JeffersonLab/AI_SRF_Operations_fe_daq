@@ -24,6 +24,7 @@ logger = logging.getLogger()
 
 def get_cavity(controls_type='2.0', style_2='old'):
     config.validate_config()
+    lp_min = config.get_parameter('linac_pressure_min')
     lp_max = config.get_parameter('linac_pressure_max')
     lp_recovery_margin = config.get_parameter('linac_pressure_margin')
     heater_capacity_min = config.get_parameter('cryo_heater_margin_min')
@@ -33,7 +34,7 @@ def get_cavity(controls_type='2.0', style_2='old'):
     # TODO: Add LLRF 1.0
     if controls_type == '2.0':
         tuner_recovery_margin = config.get_parameter('LLRF1_tuner_recovery_margin')
-        linac = Linac("NorthLinac", prefix="adamc:", linac_pressure_max=lp_max,
+        linac = Linac("NorthLinac", prefix="adamc:", linac_pressure_min=lp_min, linac_pressure_max=lp_max,
                       linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
                       heater_recovery_margin=heater_recover_margin)
         zone = Zone(name="1L22", linac=linac, controls_type='2.0', jt_max=jt_max, jt_recovery_margin=jt_recovery_margin)
@@ -44,7 +45,7 @@ def get_cavity(controls_type='2.0', style_2='old'):
         cav.update_gset_max()
     elif controls_type == '3.0':
         tuner_recovery_margin = config.get_parameter('LLRF2_tuner_recovery_margin')
-        linac = Linac("NorthLinac", prefix="adamc:", linac_pressure_max=lp_max,
+        linac = Linac("NorthLinac", prefix="adamc:", linac_pressure_min=lp_min,  linac_pressure_max=lp_max,
                       linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
                       heater_recovery_margin=heater_recover_margin)
         zone = Zone(name="1L10", linac=linac, controls_type='3.0', jt_max=jt_max, jt_recovery_margin=jt_recovery_margin)

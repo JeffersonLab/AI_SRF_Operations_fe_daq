@@ -19,7 +19,7 @@ test_prefix = "adamc:"
 
 
 class Linac:
-    def __init__(self, name: str, prefix: str, linac_pressure_max: float,
+    def __init__(self, name: str, prefix: str, linac_pressure_min: float, linac_pressure_max: float,
                  linac_pressure_recovery_margin: float, heater_margin_min: float, heater_recovery_margin: float):
         self.name = name
         self.zones = {}
@@ -28,6 +28,7 @@ class Linac:
         self.ndx_electrometers = {}
         self.epics_lock = threading.Lock()
         self.linac_pressure_max = linac_pressure_max
+        self.linac_pressure_min = linac_pressure_min
         self.lp_recovery_margin = linac_pressure_recovery_margin
         self.heater_margin_min = heater_margin_min
         self.heater_recovery_margin = heater_recovery_margin
@@ -42,10 +43,9 @@ class Linac:
             raise ValueError(f"Unsupported linac name '{name}'")
 
         # We need to watch and make sure that we don't exceed linac pressure or heater margin requirements for stable
-        # operations.
-        self.linac_pressure.add_callback(get_threshold_cb(high=self.linac_pressure_max))  # Nominal linac pressure is 0.0385.
-        print(f"Adding callback for {self.heater_margin.pvname}")
-        self.heater_margin.add_callback(get_threshold_cb(low=self.heater_margin_min))  # We want margin > 1
+        # operations.  Nominal linac pressure is 0.0385.  Probably want marginal heater capacity at least > 2.
+        self.linac_pressure.add_callback(get_threshold_cb(low=self.linac_pressure_min, high=self.linac_pressure_max))
+        self.heater_margin.add_callback(get_threshold_cb(low=self.heater_margin_min))
 
         self.pv_list = [self.linac_pressure, self.heater_margin]
 
@@ -349,7 +349,8 @@ class LinacFactory:
         Segmask name format  is NorthLinac, SouthLinac.
         """
 
-        linac = Linac(name, prefix=self.pv_prefix, linac_pressure_max=config.get_parameter("linac_pressure_max"),
+        linac = Linac(name, prefix=self.pv_prefix, linac_pressure_min=config.get_parameter("linac_pressure_min"),
+                      linac_pressure_max=config.get_parameter("linac_pressure_max"),
                       linac_pressure_recovery_margin=config.get_parameter("linac_pressure_margin"),
                       heater_margin_min=config.get_parameter("cryo_heater_margin_min"),
                       heater_recovery_margin=config.get_parameter("cryo_heater_margin_recovery_margin"))

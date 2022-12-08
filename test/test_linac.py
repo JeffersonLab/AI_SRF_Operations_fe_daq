@@ -18,6 +18,7 @@ def setUpModule():
 
 def get_linac_zone(linac_name, zone_name, controls_type):
     config.validate_config()
+    lp_min = config.get_parameter('linac_pressure_min')
     lp_max = config.get_parameter('linac_pressure_max')
     lp_recovery_margin = config.get_parameter('linac_pressure_margin')
     heater_capacity_min = config.get_parameter('cryo_heater_margin_min')
@@ -25,7 +26,7 @@ def get_linac_zone(linac_name, zone_name, controls_type):
     jt_max = config.get_parameter('jt_valve_position_max')
     jt_recovery_margin = config.get_parameter('jt_valve_margin')
 
-    linac = Linac(linac_name, prefix="adamc:", linac_pressure_max=lp_max,
+    linac = Linac(linac_name, prefix="adamc:", linac_pressure_min=lp_min, linac_pressure_max=lp_max,
                   linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
                   heater_recovery_margin=heater_recover_margin)
     zone = Zone(name=zone_name, linac=linac, controls_type=controls_type, jt_max=jt_max,
