@@ -1,0 +1,151 @@
+{
+    ########### Debug Settings ################
+    "testing": true,
+
+    ############## Cavities To Skip ###########
+    # Allows the user to specify cavities that need to be skipped by this program.
+    # "skip_cavities": ["R1M1", "R1M2"],
+
+    ################ NDX Config ###############
+    # Allows for manual override on what HV level should be expected for an NDX electrometer (in Volts).
+    # Defaults to 1000 if not set here.
+#    "ndx_target_high_voltage": {
+#        "NDX0L04": 1000,
+#        "NDX1L05": 1000,
+#        "NDX1L07": 1000,
+#        "NDX1L10": 1000,
+#        "NDX1L22": 1000,
+#        "NDX1L24": 1000,
+#        "NDX1L26": 1000,
+#        "NDX1S01": 1000,
+#        "NDX2L22": 1000,
+#        "NDX2L24": 1000,
+#        "NDX2L26": 1000,
+#        "NDX2S01": 1000,
+#        "NDX7A15": 1000,
+#    },
+
+    ################ Cryo Configs ################
+    # Max acceptable linac pressure value, target is 0.0385 per J. Benesch
+    "linac_pressure_max": 0.039,
+    # Once pressure exceeds max, how far below until safe to restart (assuming 0.039 as max, don"t restart until 0.0389)
+    "linac_pressure_margin": 0.0001,
+    # Max position for JT valve.  True max is 100, but 92 should leave adequate headroom per J. Benesch.
+    "jt_valve_position_max": 92.0,
+    # Once valve has opened too far, how far below until safe to restart (assuming 92, wait until 90)
+    "jt_valve_margin": 2.0,
+    # Marginal Heater Capacity minimum (CAPHTRMGN / CAPHTR2MGN)
+    "cryo_heater_margin_min": 2.0,
+    # Marginal Heater Capacity recovery margin.  How far above min before we resume action
+    "cryo_heater_margin_recovery_margin": 1.0,
+
+    ################ LLRF 1.0 ###############
+    # How big of a step size should be taken by cavity when ramping gradient
+    "LLRF1_gmes_step_size": 0.1,
+    # How long to sleep between steps (excludes tuner time)
+    "LLRF1_gmes_sleep_interval": 0.25,
+    # How far should the tuner "recover" before we start back up
+    "LLRF1_tuner_recovery_margin": 1.0,
+
+    ################ LLRF 2.0 ###############
+    # How big of a step size should be taken by cavity when ramping gradient
+    "LLRF2_gmes_step_size": 0.1,
+    # How long to sleep between steps (excludes tuner time)
+    "LLRF2_gmes_sleep_interval": 0.25,
+    # How far should the tuner "recover" before we start back up
+    "LLRF2_tuner_recovery_margin": 1.0,
+
+    ################ LLRF 3.0 ###############
+    # How big of a step size should be taken by cavity when ramping gradient
+    "LLRF3_gmes_step_size": 0.1,
+    # How long to sleep between steps (excludes tuner time)
+    "LLRF3_gmes_sleep_interval": 0.25,
+    # How far should the tuner "recover" before we start back up
+    "LLRF3_tuner_recovery_margin": 1.0
+
+    # Max gradients for application.  These can exceed R...ODVH, but not R...GSET.DRVH
+#    "gset_max": {
+#
+#        "R1M1": 16.75,
+#        "R1M2": 11.75,
+#        "R1M3": 15.65,
+#        "R1M4": 12.05,
+#        "R1M5": 17.75,
+#        "R1M6": 19.25,
+#        "R1M7": 13.05,
+#        "R1M8": 10.25,
+#
+#        "R1N1": 14.25,
+#        "R1N2": 10.75,
+#        "R1N3": 11.25,
+#        "R1N4": 12.05,
+#        "R1N5": 18.25,
+#        "R1N6": 13.95,
+#        "R1N7": 18.75,
+#        "R1N8": 12.25,
+#
+#        "R1O1": 12.05,
+#        "R1O2": 14.95,
+#        "R1O3": 14.75,
+#        "R1O4": 19.45,
+#        "R1O5": 17.25,
+#        "R1O6": 15.35,
+#        "R1O7": 13.75,
+#        "R1O8": 13.55,
+#
+#        "R1P1": 14.95,
+#        "R1P2": 16.55,
+#        "R1P3": 20.25,
+#        "R1P4": 18.55,
+#        "R1P5": 19.75,
+#        "R1P6": 20.25,
+#        "R1P7": 18.25,
+#        "R1P8": 16.85,
+#
+#        "R2M1": 10.25,
+#        "R2M2": 10.25,
+#        "R2M3": 16.95,
+#        "R2M4": 14.25,
+#        "R2M5": 13.85,
+#        "R2M6": 17.25,
+#        "R2M7": 15.55,
+#        "R2M8": 16.75,
+#
+#        "R2N1": 18.35,
+#        "R2N2": 17.35,
+#        "R2N3": 22.25,
+#        "R2N4": 12.45,
+#        "R2N5": 16.25,
+#        "R2N6": 15.25,
+#        "R2N7": 17.05,
+#        "R2N8": 17.75,
+#
+#        "R2O1": 15.75,
+#        "R2O2": 17.75,
+#        "R2O3": 17.15,
+#        "R2O4": 16.15,
+#        "R2O5": 18.25,
+#        "R2O6": 18.75,
+#        "R2O7": 9.65,
+#        "R2O8": 15.45,
+#
+#        "R2P1": 17.55,
+#        "R2P2": 15.55,
+#        "R2P3": 17.65,
+#        "R2P4": 17.25,
+#        "R2P5": 15.75,
+#        "R2P6": 14.75,
+#        "R2P7": 16.25,
+#        "R2P8": 12.75,
+#
+#        "R2Q1": 13.25,
+#        "R2Q2": 17.15,
+#        "R2Q3": 15.75,
+#        "R2Q4": 17.75,
+#        "R2Q5": 19.35,
+#        "R2Q6": 15.25,
+#        "R2Q7": 16.05,
+#        "R2Q8": 21.83
+#
+#    } # gset_max
+}
