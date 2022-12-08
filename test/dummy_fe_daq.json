@@ -26,7 +26,8 @@
 #    },
 
     ################ Cryo Configs ################
-    # Max acceptable linac pressure value, target is 0.0385 per J. Benesch
+    # Max/min acceptable linac pressure values, target is 0.0385 per J. Benesch and R. Norton
+    "linac_pressure_min": 0.038,
     "linac_pressure_max": 0.039,
     # Once pressure exceeds max, how far below until safe to restart (assuming 0.039 as max, don"t restart until 0.0389)
     "linac_pressure_margin": 0.0001,
