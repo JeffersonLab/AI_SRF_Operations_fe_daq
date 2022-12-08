@@ -7,19 +7,27 @@ from fe_daq import app_config as config
 from fe_daq.detector import NDXElectrometer, NDXDetector
 from fe_daq.linac import Zone, Linac
 from fe_daq.cavity import Cavity
-from scipy.stats import ttest_ind
 
 # logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger()
 
 
 def setUpModule():
-    config.set_parameter("testing", True)
+    config.parse_config_file(config.app_root + "/test/dummy_fe_daq.json")
 
 
 def get_cavity():
-    linac = Linac("TestLinac")
-    zone = Zone(name="1L22", linac=linac)
+    lp_max = config.get_parameter('linac_pressure_max')
+    lp_recovery_margin = config.get_parameter('linac_pressure_margin')
+    heater_capacity_min = config.get_parameter('cryo_heater_margin_min')
+    heater_recover_margin = config.get_parameter('cryo_heater_margin_recovery_margin')
+    jt_max = config.get_parameter('jt_valve_position_max')
+    jt_recovery_margin = config.get_parameter('jt_valve_margin')
+
+    linac = Linac("TestLinac", prefix="adamc:", linac_pressure_max=lp_max,
+                  linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
+                  heater_recovery_margin=heater_recover_margin)
+    zone = Zone(name="1L22", linac=linac, controls_type='2.0', jt_max=jt_max, jt_recovery_margin=jt_recovery_margin)
     cav = Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False, zone=zone,
                  Q0=6e9)
     return cav
