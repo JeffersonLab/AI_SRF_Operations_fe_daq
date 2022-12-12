@@ -648,7 +648,9 @@ class LLRF2Cavity(Cavity):
         Args:
             gset: The new value to set GSET to
             settle_time: How long we need to wait for cryo system to adjust to change in heat load
-            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C100s ramp for larger steps.
+            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  Some C100s ramp for larger step.
+                           This option only used for older 2.0 cavities.  If newer 2.0 cavities, we don't wait for ramp,
+                           as they do the ramping in this software and introduce a wait as needed.
             ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
             force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
             gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
@@ -657,14 +659,23 @@ class LLRF2Cavity(Cavity):
 
         logger.info(f"{self.name}:  Setting gradient from {self.gset.value} to {gset}.")
         self._validate_requested_gradient(gset=gset, force=force)
+        # Newer style cavities are ramping in this software, so we don't have to wait and watch for external ramping.
         if self.fcc_firmware_version > 2019:
-            # Newer firmware versions do not ramp the gradient and will trip if you move more than ~0.2 MV/m in a step
-            self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
-                                      ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
-        else:
-            # Older firmware versions will ramp the gradient and handle tuning as they go
-            self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
-                               ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+            wait_for_ramp = False
+
+        # Newer style control systems provide ramping that track detune issues, but not necessarily anything else.
+        # It's safest to always ramp, since the worst case scenario is that we wait a little longer while than
+        # necessary at the cost of not exceeding cryo, etc. limits.
+        self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
+                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+        # if self.fcc_firmware_version > 2019:
+        #     # Newer firmware versions do not ramp the gradient and will trip if you move more than ~0.2 MV/m in a step
+        #     self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
+        #                               ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+        # else:
+        #     # Older firmware versions will ramp the gradient and handle tuning as they go
+        #     self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
+        #                        ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
 
 
 class LLRF3Cavity(Cavity):
@@ -725,15 +736,10 @@ class LLRF3Cavity(Cavity):
         return False
 
     def is_gradient_ramping(self, gmes_threshold: float = 0.3) -> bool:
-        """Determine if the cavity gradient is ramping to the target.
-
-        The approach is different for every cavity type.  As a fallback, check if gmes is "close" to gset.  Some
-        cavities are off by more 0.25 MV/m while others are within <0.1 MV/m.  The default tolerance has to be
-        surprisingly high because of this.
+        """Determine if the cavity gradient is ramping to the target by checking status bits.
 
         Args:
-            gmes_threshold: The minimum absolute difference between gmes and gset that indicates ramping.  Only used if
-                            no better way of checking for ramping is present.
+            gmes_threshold: The minimum absolute difference between gmes and gset that indicates ramping.  NOT USED.
         """
         if not self.is_rf_on():
             raise RuntimeError(f"RF is off at {self.name}")
@@ -763,6 +769,8 @@ class LLRF3Cavity(Cavity):
 
         logger.info(f"{self.name}:  Setting gradient from {self.gset.value} to {gset}.")
         self._validate_requested_gradient(gset=gset, force=force)
-        self.wait_for_tuning()
-        self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp, ramp_timeout=ramp_timeout,
-                           gradient_epsilon=gradient_epsilon)
+        # self.wait_for_tuning()
+        self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
+                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+        # self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp, ramp_timeout=ramp_timeout,
+        #                    gradient_epsilon=gradient_epsilon)
