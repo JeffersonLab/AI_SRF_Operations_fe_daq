@@ -33,7 +33,7 @@ def get_cavity(controls_type='2.0', style_2='old'):
     jt_recovery_margin = config.get_parameter('jt_valve_margin')
     # TODO: Add LLRF 1.0
     if controls_type == '2.0':
-        tuner_recovery_margin = config.get_parameter('LLRF1_tuner_recovery_margin')
+        tuner_recovery_margin = config.get_parameter('LLRF2_tuner_recovery_margin')
         linac = Linac("NorthLinac", prefix="adamc:", linac_pressure_min=lp_min, linac_pressure_max=lp_max,
                       linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
                       heater_recovery_margin=heater_recover_margin)
@@ -44,7 +44,7 @@ def get_cavity(controls_type='2.0', style_2='old'):
             cav.fcc_firmware_version = 2018.0
         cav.update_gset_max()
     elif controls_type == '3.0':
-        tuner_recovery_margin = config.get_parameter('LLRF2_tuner_recovery_margin')
+        tuner_recovery_margin = config.get_parameter('LLRF3_tuner_recovery_margin')
         linac = Linac("NorthLinac", prefix="adamc:", linac_pressure_min=lp_min,  linac_pressure_max=lp_max,
                       linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
                       heater_recovery_margin=heater_recover_margin)
