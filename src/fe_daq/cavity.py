@@ -154,8 +154,11 @@ class Cavity:
         start_ramp = datetime.now()
         needed_tuning = False
         while self.is_tuning_required():
-            needed_tuning = True
-            logger.info(f"{self.name}: Waiting for tuner")
+            if not needed_tuning:
+                # Only do this stuff the first time
+                logger.info(f"{self.name}: Waiting for tuner (timeout = {tune_timeout})")
+                needed_tuning = True
+
             StateMonitor.monitor(0.05)
             if (datetime.now() - start_ramp).total_seconds() > tune_timeout:
                 logger.warning(f"{self.name} is taking a long time to tune.")
@@ -320,7 +323,8 @@ class Cavity:
             else:
                 logger.info(f"{self.name} did not ramp gradient")
 
-        logger.info(f"{self.name} Waiting {settle_time} seconds for cryo to adjust")
+        if settle_time > 0:
+            logger.info(f"{self.name} Waiting {settle_time} seconds for cryo to adjust")
         StateMonitor.monitor(duration=settle_time)
 
     def _wait_for_jt(self, timeout: float):
@@ -655,7 +659,7 @@ class LLRF2Cavity(Cavity):
         self._validate_requested_gradient(gset=gset, force=force)
         if self.fcc_firmware_version > 2019:
             # Newer firmware versions do not ramp the gradient and will trip if you move more than ~0.2 MV/m in a step
-            self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
+            self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
                                       ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
         else:
             # Older firmware versions will ramp the gradient and handle tuning as they go
