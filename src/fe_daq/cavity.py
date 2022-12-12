@@ -294,7 +294,7 @@ class Cavity:
                 last_checked = datetime.now()
                 ramp_started = self.is_gradient_ramping()
                 if ramp_started:
-                    logger.info(f"{self.name} is ramping gradient")
+                    logger.info(f"{self.name}: is ramping gradient")
                     break
                 # Add a sleep/monitor and check if we've reached our target gradient.  If we're this close and the
                 # cavity is not ramping, then it's very unlikely  to ramp.  This difference is the usual noise in GMES.
@@ -304,7 +304,7 @@ class Cavity:
 
             if ramp_started:
                 # Here we have to wait for the gradient to finish ramping, assuming it actually started
-                logger.info(f"{self.name} waiting for gradient to ramp")
+                logger.info(f"{self.name}: waiting for gradient to ramp")
                 start_ramp = datetime.now()
                 while self.is_gradient_ramping():
                     StateMonitor.monitor(0.1)
@@ -319,10 +319,10 @@ class Cavity:
                             raise RuntimeError(msg)
                         start_ramp = datetime.now()
             else:
-                logger.info(f"{self.name} did not ramp gradient")
+                logger.info(f"{self.name}: did not ramp gradient")
 
         if settle_time > 0:
-            logger.info(f"{self.name} Waiting {settle_time} seconds for cryo to adjust")
+            logger.info(f"{self.name}: Waiting {settle_time} seconds for cryo to adjust")
         StateMonitor.monitor(duration=settle_time)
 
     def _wait_for_jt(self, timeout: float):
@@ -402,8 +402,8 @@ class Cavity:
         else:
             step_dir = -1
 
-        logger.info(f"{self.name}: Manually ramping gradient from {actual_gset} to {gset} in {self.gmes_step_size}"
-                    f" MV/m steps with {self.gmes_sleep_interval}s waits.")
+        # logger.info(f"{self.name}: Manually ramping gradient from {actual_gset} to {gset} in {self.gmes_step_size}"
+        #             f" MV/m steps with {self.gmes_sleep_interval}s waits.")
 
         # Walk step size until we're within a single step
         while abs(gset - actual_gset) > self.gmes_step_size:
@@ -551,6 +551,7 @@ class LLRF1Cavity(Cavity):
 
         """
 
+        logger.info(f"{self.name}: Setting gradient from {self.gset.value} to {gset}.")
         self._validate_requested_gradient(gset=gset, force=force)
         self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
                                   ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
@@ -654,6 +655,7 @@ class LLRF2Cavity(Cavity):
 
         """
 
+        logger.info(f"{self.name}:  Setting gradient from {self.gset.value} to {gset}.")
         self._validate_requested_gradient(gset=gset, force=force)
         if self.fcc_firmware_version > 2019:
             # Newer firmware versions do not ramp the gradient and will trip if you move more than ~0.2 MV/m in a step
@@ -759,6 +761,7 @@ class LLRF3Cavity(Cavity):
 
         """
 
+        logger.info(f"{self.name}:  Setting gradient from {self.gset.value} to {gset}.")
         self._validate_requested_gradient(gset=gset, force=force)
         self.wait_for_tuning()
         self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp, ramp_timeout=ramp_timeout,
