@@ -146,50 +146,50 @@ class Cavity:
     def is_tuning_required(self):
         raise NotImplementedError("Must be implemented by child classes")
 
-    def wait_for_tuning(self, tune_timeout: float = 60):
-        """Method that waits for a cavity to be brought back within tune limits.  No Waiting if no tuning required.
+    def wait_for_tuning(self, tune_timeout: float = 60, interactive: bool = True):
+        """Method that waits for a cavity to be brought back within tune limits.  No Waiting if no tuning required."""
+        if self.is_tuning_required():
+            start_ramp = datetime.now()
+            logger.info(f"{self.name}: Waiting for tuner (timeout = {tune_timeout})")
 
-        THis uses the global state monitor and prompts for user interaction for any problem anywhere.
-        """
-        start_ramp = datetime.now()
-        needed_tuning = False
-        while self.is_tuning_required():
-            if not needed_tuning:
-                # Only do this stuff the first time
-                logger.info(f"{self.name}: Waiting for tuner (timeout = {tune_timeout})")
-                needed_tuning = True
+            while self.is_tuning_required():
+                time.sleep(0.05)
+                # StateMonitor.monitor(0.05)
+                if (datetime.now() - start_ramp).total_seconds() > tune_timeout:
+                    logger.warning(f"{self.name} is taking a long time to tune.")
+                    response = input(f"Waited {tune_timeout} seconds for {self.name} to tune.  "
+                                     f"Continue waiting? (n|y): ").lstrip().lower()
+                    if interactive:
+                        if not response.startswith("y"):
+                            msg = f"User requested exit while waiting on {self.name} to tune."
+                            logger.error(msg)
+                            raise RuntimeError(msg)
+                        # Restart the counter
+                        logger.info(f"{self.name}: Waiting for tuner (timeout = {tune_timeout})")
+                        start_ramp = datetime.now()
+                    else:
+                        msg = f"{self.name}:  Timed out waiting on tuner."
+                        logger.error(msg)
+                        raise RuntimeError(msg)
 
-            StateMonitor.monitor(0.05)
-            if (datetime.now() - start_ramp).total_seconds() > tune_timeout:
-                logger.warning(f"{self.name} is taking a long time to tune.")
-                response = input(
-                    f"Waited {tune_timeout} seconds for {self.name} to tune.  Continue waiting? (n|y): ").lstrip().lower()
-                if not response.startswith("y"):
-                    msg = f"User requested exit while waiting on {self.name} to tune."
-                    logger.error(msg)
-                    raise RuntimeError(msg)
-                # Restart the counter by pretending we just started to tune
-                start_ramp = datetime.now()
-
-        if needed_tuning:
             logger.info(f"{self.name}: Done tuning")
-
-    def _wait_for_tuning(self, timeout: float):
-        """Check the status of the tuners and wait at most timeout seconds if tuning is required"""
-        start_ramp = datetime.now()
-        needed_tuning = False
-        margin = 0
-        while self.is_tuning_required(margin=margin):
-            margin = self.tuner_recovery_margin
-            needed_tuning = True
-            logger.info(f"{self.name}: Waiting {timeout} seconds for tuner to finish")
-            time.sleep(0.05)
-            if (datetime.now() - start_ramp).total_seconds() > timeout:
-                logger.warning(f"{self.name} timed out waiting for tuner.")
-                raise RuntimeError(f"{self.name} tuner timed out")
-
-        if needed_tuning:
-            logger.info(f"{self.name}: Done tuning")
+    #
+    # def _wait_for_tuning(self, timeout: float):
+    #     """Check the status of the tuners and wait at most timeout seconds if tuning is required"""
+    #     start_ramp = datetime.now()
+    #     needed_tuning = False
+    #     margin = 0
+    #     while self.is_tuning_required(margin=margin):
+    #         margin = self.tuner_recovery_margin
+    #         needed_tuning = True
+    #         logger.info(f"{self.name}: Waiting {timeout} seconds for tuner to finish")
+    #         time.sleep(0.05)
+    #         if (datetime.now() - start_ramp).total_seconds() > timeout:
+    #             logger.warning(f"{self.name} timed out waiting for tuner.")
+    #             raise RuntimeError(f"{self.name} tuner timed out")
+    #
+    #     if needed_tuning:
+    #         logger.info(f"{self.name}: Done tuning")
 
     def get_jiggled_pset_value(self, delta: float) -> float:
         """Calculate a random.uniform offset from pset_init of maximum +/- 5.  No changes to EPICS"""
@@ -247,8 +247,6 @@ class Cavity:
             next_gset = actual_gset + (step_dir * step_size)
             self.set_gradient(gset=next_gset, **kwargs)
             actual_gset = self.gset.get(use_monitor=False)
-            if wait_interval > 0:
-                time.sleep(wait_interval)
 
         # We should be within a single step here.
         self.set_gradient(gset=gset, **kwargs)
