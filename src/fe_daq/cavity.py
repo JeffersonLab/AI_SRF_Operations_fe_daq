@@ -143,12 +143,12 @@ class Cavity:
     def is_gradient_ramping(self, gmes_threshold: float):
         raise NotImplementedError("Must be implemented by child classes")
 
-    def is_tuning_required(self):
+    def is_tuning_required(self, margin: Optional[float] = None):
         raise NotImplementedError("Must be implemented by child classes")
 
     def wait_for_tuning(self, tune_timeout: float = 60, interactive: bool = True):
         """Method that waits for a cavity to be brought back within tune limits.  No Waiting if no tuning required."""
-        if self.is_tuning_required():
+        if self.is_tuning_required(margin=0):
             start_ramp = datetime.now()
             logger.info(f"{self.name}: Waiting for tuner (timeout = {tune_timeout})")
 
@@ -172,7 +172,7 @@ class Cavity:
                         logger.error(msg)
                         raise RuntimeError(msg)
 
-            logger.info(f"{self.name}: Done tuning")
+            logger.info(f"{self.name}: Done waiting for tuner")
     #
     # def _wait_for_tuning(self, timeout: float):
     #     """Check the status of the tuners and wait at most timeout seconds if tuning is required"""
@@ -207,17 +207,19 @@ class Cavity:
         # gradient is units of MV/m. formula expects V/m, so 1e12
         return (g * g * self.length * 1e12) / (self.shunt_impedance * self.Q0)
 
-    def walk_gradient(self, gset: float, step_size: Optional[float] = 1.0, wait_interval: Optional[float] = 0.0,
+    def walk_gradient(self, gset: float, step_size: Optional[float] = 1.0, wait_interval: Optional[float] = 0,
                       **kwargs) -> None:
-        """Move the gradient of the cavity to gset in steps.
+        """Move the gradient of the cavity to gset in steps.  All cavities should ramp themselves.
 
-        This always waits for the gradient to ramp, but allows for user specified settle_time and ramping timeouts.
+        Some cavities ramp themselves in firmware, and likely do not watch cryo.  Cavities that ramp in this software
+        have made an effort to watch multiple CEBAF systems, including cryo, and not enter any dangerous situations.
+        Use the settle_time argument to provide dedicated opportunities for checking cryo.
 
         Args:
             gset:  The target gradient set point
             step_size:  The maximum size steps to make in MV/m by absolute value.  Use class gmes_step_size if None.
-            wait_interval: How long to wait between steps.  Some cavities do not ramp themselves.  Use object's
-                           gmes_sleep_interval if None.
+            wait_interval:  Additional sleep put between steps with no additional checks.  Use class gmes_sleep_interval
+                            if None.
 
         Additional kwargs are passed to set_gradient.
         """
@@ -234,18 +236,19 @@ class Cavity:
         else:
             step_dir = -1
 
-        if gset > self.odvh.value:
-            msg = f"Requested {self.name} gradient higher than ODVH {self.odvh.value}."
+        if gset > self.gset_max:
+            msg = f"Requested {self.name} gradient higher than max allowed GSET {self.gset_max}."
             logger.error(msg)
             raise ValueError(msg)
 
-        logger.info(f"{self.name}: Walking {actual_gset} to {gset} in {step_size} MV/m steps with {wait_interval}s "
-                    f"waits.")
+        logger.info(f"{self.name}: Walking {actual_gset} to {gset} in {step_size} MV/m steps.")
 
         # Walk step size until we're within a single step
         while abs(gset - actual_gset) > step_size:
             next_gset = actual_gset + (step_dir * step_size)
             self.set_gradient(gset=next_gset, **kwargs)
+            if wait_interval > 0:
+                time.sleep(wait_interval)
             actual_gset = self.gset.get(use_monitor=False)
 
         # We should be within a single step here.
@@ -408,10 +411,7 @@ class Cavity:
         # Walk step size until we're within a single step
         while abs(gset - actual_gset) > self.gmes_step_size:
             # Don't make a change unless we are sufficiently tuned and cryo is happy.  These raise on timeout
-            self.wait_for_tuning(tune_timeout=tune_timeout)
-            self._wait_for_jt(timeout=60)
-            self._wait_for_linac_pressure(timeout=60)
-            self._wait_for_heater_margins(timeout=60)
+            self._do_ramp_checks(tune_timeout=tune_timeout)
 
             next_gset = actual_gset + (step_dir * self.gmes_step_size)
 
@@ -422,7 +422,14 @@ class Cavity:
                 time.sleep(self.gmes_sleep_interval)
 
         # We should be within a single step here.  Now wait the full settle time.
+        self._do_ramp_checks(tune_timeout=tune_timeout)
         self._set_gradient(gset=gset, settle_time=settle_time, **kwargs)
+
+    def _do_ramp_checks(self, tune_timeout: float):
+        self.wait_for_tuning(tune_timeout=tune_timeout)
+        self._wait_for_jt(timeout=60)
+        self._wait_for_linac_pressure(timeout=60)
+        self._wait_for_heater_margins(timeout=60)
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
                      force: bool = False, gradient_epsilon: float = 0.05):
@@ -525,13 +532,17 @@ class LLRF1Cavity(Cavity):
         is_ramping = math.fabs(self.gmes.value - self.gset.value) > gmes_threshold
         return is_ramping
 
-    def is_tuning_required(self):
+    def is_tuning_required(self, margin: Optional[float] = None):
         """Check if tuning is required.
 
         Note the tuners may be running even when not 'required' as they start when required, but then run down to a
         lower level to give more margin for detuning.
         """
-        return math.fabs(self.tdeta.value) > self.tdeta_n.value
+
+        if margin is None:
+            margin = self.tuner_recovery_margin
+
+        return math.fabs(self.tdeta.value) > (self.tdeta_n.value - margin)
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
                      force: bool = False, gradient_epsilon: float = 0.05):
@@ -613,9 +624,12 @@ class LLRF2Cavity(Cavity):
         self.gset_max = self.gset_min
         self.gset_max_requested = gset_max
 
-    def is_tuning_required(self) -> bool:
+    def is_tuning_required(self, margin: Optional[float] = None) -> bool:
         """Check if we are outside the bounds where the tuner should be active."""
-        return math.fabs(self.cfqe.value) >= self.detahzhi.value
+        if margin is None:
+            margin = self.tuner_recovery_margin
+
+        return math.fabs(self.cfqe.value) >= (self.detahzhi.value - margin)
 
     def is_rf_on(self) -> bool:
         """A simple method to determine if RF is on in a cavity"""
@@ -729,9 +743,14 @@ class LLRF3Cavity(Cavity):
         """A simple method to determine if RF is on in a cavity"""
         return self.rf_on.value == 1
 
-    def is_tuning_required(self):
+    def is_tuning_required(self, margin: Optional[float] = None):
         """A check if the cavity detune has passed it's tuner activation threshold."""
-        if math.fabs(self.cfqe.value) > self.detahzhi.value:
+
+        if margin is None:
+            margin = self.tuner_recovery_margin
+
+        logger.error(f"{self.name}: is tuning required {self.cfqe.value}, {self.detahzhi.value}")
+        if math.fabs(self.cfqe.value) > (self.detahzhi.value - margin):
             return True
         return False
 
