@@ -1,4 +1,3 @@
-import sys
 import threading
 import time
 from datetime import datetime
@@ -9,11 +8,10 @@ import logging
 import epics
 
 from fe_daq import app_config as config
-from fe_daq.cavity import Cavity, LLRF3Cavity, LLRF2Cavity
+from fe_daq.cavity import Cavity
+from test.t_utils import get_linac_zone_cavity
 
 # logging.basicConfig(level=logging.DEBUG)
-from src.fe_daq.linac import Zone, Linac
-from test.t_utils import get_linac_zone_cavity
 
 
 def setUpModule():
