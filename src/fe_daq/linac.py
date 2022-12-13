@@ -58,25 +58,32 @@ class Linac:
                     raise Exception(f"PV {pv.pvname} failed to connect.")
 
 
-    def check_linac_pressure(self, threshold: Optional[float] = None) -> Tuple[bool, float]:
+    def check_linac_pressure(self, min_val: Optional[float] = None, max_val: Optional[float] = None) -> Tuple[bool, float]:
         """Check that the linac pressue is not too high.  Use self.linac_pressure_max if threshold is None.
 
         Thread-safe.
         """
-        maximum = threshold
-        if threshold is None:
+        maximum = max_val
+        if maximum is None:
             if self.linac_pressure_max is None:
-                raise RuntimeError("No max value given for jt valve position, and default is None.")
+                raise RuntimeError("No max value given for linac pressure, and default is None.")
             maximum = self.linac_pressure_max
+        minimum = min_val
+        if minimum is None:
+            if self.linac_pressure_min is None:
+                raise RuntimeError("No min value given for linac pressure, and default is None.")
+            minimum = self.linac_pressure_min
 
         # Not sure that we need to synchronize here, but it's better safe than sorry.
         with self.epics_lock:
             value = self.linac_pressure.value
-        above = False
-        if value >= maximum:
-            above = True
+        out_of_spec = False
+        if value > maximum:
+            out_of_spec = True
+        elif value < minimum:
+            out_of_spec = True
 
-        return above, value
+        return out_of_spec, value
 
     def check_heater_margin(self, threshold: Optional[float] = None) -> Tuple[bool, float]:
         """Check that the heater margin is not too low.  Use self. if threshold is None.  Thread-safe."""
