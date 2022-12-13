@@ -1,6 +1,5 @@
 import logging
 
-from typing import Tuple
 from unittest import TestCase
 import concurrent.futures
 import time
@@ -9,10 +8,10 @@ import epics
 import numpy as np
 
 from fe_daq import app_config as config
-from fe_daq.cavity import Cavity, LLRF2Cavity
+from fe_daq.cavity import Cavity
 from fe_daq.detector import NDXElectrometer
-from fe_daq.linac import Zone, Linac
 from fe_daq.state_monitor import StateMonitor
+from test.t_utils import get_linac_zone_cavity
 
 logger = logging.getLogger()
 prefix = "adamc:"
@@ -38,33 +37,6 @@ def reinit_all():
     config.parse_config_file(config.app_root + "/test/dummy_fe_daq.json")
 
 
-def create_linac_zone_cav() -> Tuple[Linac, Zone, Cavity]:
-    config.validate_config()
-    lp_min = config.get_parameter('linac_pressure_min')
-    lp_max = config.get_parameter('linac_pressure_max')
-    lp_recovery_margin = config.get_parameter('linac_pressure_margin')
-    heater_capacity_min = config.get_parameter('cryo_heater_margin_min')
-    heater_recover_margin = config.get_parameter('cryo_heater_margin_recovery_margin')
-    jt_max = config.get_parameter('jt_valve_position_max')
-    jt_recovery_margin = config.get_parameter('jt_valve_margin')
-
-    tuner_recovery_margin = config.get_parameter('LLRF1_tuner_recovery_margin')
-    linac = Linac("NorthLinac", prefix=prefix, linac_pressure_min=lp_min, linac_pressure_max=lp_max,
-                  linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
-                  heater_recovery_margin=heater_recover_margin)
-    zone = Zone(name="1L22", prefix=prefix, linac=linac, controls_type='2.0', jt_max=jt_max,
-                jt_recovery_margin=jt_recovery_margin, jt_suffix=jt_suffix)
-    cav = LLRF2Cavity(name="1L22-1", epics_name=f"{prefix}R1M1", cavity_type="C100", length=0.7, bypassed=False,
-                      zone=zone, Q0=6e9, tuner_recovery_margin=tuner_recovery_margin)
-    cav.fcc_firmware_version = 2018.0
-
-    linac.wait_for_connections()
-    zone.wait_for_connections()
-    cav.wait_for_connections()
-    cav.update_gset_max()
-
-    return linac, zone, cav
-
 def flapping_pv(pvname, n=3, max_sleep=0.001):
     for i in range(n):
         time.sleep(np.random.uniform(0, max_sleep))
@@ -85,7 +57,7 @@ class TestStateMonitor(TestCase):
         # Clear out previous state
         reinit_all()
 
-        linac, zone, cav = create_linac_zone_cav()
+        linac, zone, cav = get_linac_zone_cavity()
         pvs = [cav.rf_on.pvname]
         for i in range(2, 9):
             cav2 = Cavity.get_cavity(name='1L22-2', epics_name='adamc:R1M2', cavity_type='C100', length=0.7,
@@ -116,7 +88,7 @@ class TestStateMonitor(TestCase):
         self.assertTrue(StateMonitor.daq_good(), StateMonitor.output_state())
 
         # Create a cavity with supporting structure
-        linac, zone, cav = create_linac_zone_cav()
+        linac, zone, cav = get_linac_zone_cavity()
 
         # The test IOC start with RF on.
         # 1. Verify daq_good == True
@@ -137,7 +109,7 @@ class TestStateMonitor(TestCase):
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac, zone, cav = create_linac_zone_cav()
+        linac, zone, cav = get_linac_zone_cavity()
 
         cav.rf_on.put(1, wait=True)
         time.sleep(0.01)
@@ -150,7 +122,7 @@ class TestStateMonitor(TestCase):
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac, zone, cav = create_linac_zone_cav()
+        linac, zone, cav = get_linac_zone_cavity()
 
         cav.fsd.put(256, wait=True)
         time.sleep(0.01)
@@ -165,7 +137,7 @@ class TestStateMonitor(TestCase):
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac, zone, cav = create_linac_zone_cav()
+        linac, zone, cav = get_linac_zone_cavity()
 
         cav.rf_on.put(0, wait=True)
         time.sleep(0.01)
@@ -187,7 +159,7 @@ class TestStateMonitor(TestCase):
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac, zone, cav = create_linac_zone_cav()
+        linac, zone, cav = get_linac_zone_cavity()
         old_value = zone.jt_stroke.get(use_monitor=False)
         zone.jt_stroke.put(95, wait=True)
 
@@ -204,7 +176,7 @@ class TestStateMonitor(TestCase):
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac, zone, cav = create_linac_zone_cav()
+        linac, zone, cav = get_linac_zone_cavity()
         old_value = linac.linac_pressure.value
 
         # Set too high
@@ -237,7 +209,7 @@ class TestStateMonitor(TestCase):
         reinit_all()
 
         # Create a cavity with supporting structure
-        linac, zone, cavity = create_linac_zone_cav()
+        linac, zone, cav = get_linac_zone_cavity()
         old_value = linac.heater_margin.value
         linac.heater_margin.put(1, wait=True)
         time.sleep(0.05)
