@@ -89,13 +89,13 @@ class Linac:
         """Check that the heater margin is not too low.  Use self. if threshold is None.  Thread-safe."""
         minimum = threshold
         if threshold is None:
-            if self.linac_pressure_max is None:
-                raise RuntimeError("No max value given for jt valve position, and default is None.")
+            if self.heater_margin_min is None:
+                raise RuntimeError("No min value given for heater capacity margin, and default is None.")
             minimum = self.heater_margin_min
 
         # Not sure that we need to synchronize here, but it's better safe than sorry.
         with self.epics_lock:
-            value = self.linac_pressure.value
+            value = self.heater_margin.value
         above = False
         if value <= minimum:
             above = True
