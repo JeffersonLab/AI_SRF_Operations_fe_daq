@@ -13,6 +13,7 @@ from fe_daq.cavity import Cavity, LLRF3Cavity, LLRF2Cavity
 
 # logging.basicConfig(level=logging.DEBUG)
 from src.fe_daq.linac import Zone, Linac
+from test.t_utils import get_linac_zone_cavity
 
 
 def setUpModule():
@@ -20,42 +21,6 @@ def setUpModule():
 
 
 logger = logging.getLogger()
-
-
-def get_cavity(controls_type='2.0', style_2='old'):
-    config.validate_config()
-    lp_min = config.get_parameter('linac_pressure_min')
-    lp_max = config.get_parameter('linac_pressure_max')
-    lp_recovery_margin = config.get_parameter('linac_pressure_margin')
-    heater_capacity_min = config.get_parameter('cryo_heater_margin_min')
-    heater_recover_margin = config.get_parameter('cryo_heater_margin_recovery_margin')
-    jt_max = config.get_parameter('jt_valve_position_max')
-    jt_recovery_margin = config.get_parameter('jt_valve_margin')
-    # TODO: Add LLRF 1.0
-    if controls_type == '2.0':
-        tuner_recovery_margin = config.get_parameter('LLRF2_tuner_recovery_margin')
-        linac = Linac("NorthLinac", prefix="adamc:", linac_pressure_min=lp_min, linac_pressure_max=lp_max,
-                      linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
-                      heater_recovery_margin=heater_recover_margin)
-        zone = Zone(name="1L22", linac=linac, controls_type='2.0', jt_max=jt_max, jt_recovery_margin=jt_recovery_margin)
-        cav = LLRF2Cavity(name="1L22-1", epics_name="adamc:R1M1", cavity_type="C100", length=0.7, bypassed=False,
-                          zone=zone, Q0=6e9, tuner_recovery_margin=tuner_recovery_margin)
-        if style_2 == 'old':
-            cav.fcc_firmware_version = 2018.0
-        cav.update_gset_max()
-    elif controls_type == '3.0':
-        tuner_recovery_margin = config.get_parameter('LLRF3_tuner_recovery_margin')
-        linac = Linac("NorthLinac", prefix="adamc:", linac_pressure_min=lp_min,  linac_pressure_max=lp_max,
-                      linac_pressure_recovery_margin=lp_recovery_margin, heater_margin_min=heater_capacity_min,
-                      heater_recovery_margin=heater_recover_margin)
-        zone = Zone(name="1L10", linac=linac, controls_type='3.0', jt_max=jt_max, jt_recovery_margin=jt_recovery_margin)
-        cav = LLRF3Cavity(name="1L10-1", epics_name="adamc:R1A1", cavity_type="C75", length=0.4916, bypassed=False,
-                          zone=zone, Q0=6.3e9, tuner_recovery_margin=tuner_recovery_margin)
-        cav.update_gset_max()
-    else:
-        raise RuntimeError("Unsupported controls_type")
-
-    return cav
 
 
 def get_gradient_step_size(cavity: Cavity):
@@ -74,7 +39,7 @@ def stop_ramping(pvname, delay=0.5):
 
 class TestCavity(TestCase):
     def test_get_jiggled_pset_value(self):
-        cav = get_cavity()
+        linac, zone, cav = get_linac_zone_cavity()
 
         init = cav.pset_init
 
@@ -92,7 +57,7 @@ class TestCavity(TestCase):
         self.assertTrue(delta > max_val, f"Jiggled too much.  Observed max jiggle {max_val} (>{delta})")
 
     def test_calculate_heat(self):
-        cav = get_cavity()
+        linac, zone, cav = get_linac_zone_cavity()
 
         # Test that the answer is expected when we supply the gradient
         exp = 10 * 10 * 1e12 * 0.7 / (1241.3 * 6e9)
@@ -107,42 +72,47 @@ class TestCavity(TestCase):
 
     def test_walk_gradient(self):
 
-        values_lock = threading.Lock()
-        values = {}
-        def track_values_cb(pvname, value, **kwargs):
+        try:
+            values_lock = threading.Lock()
+            values = {}
+            def track_values_cb(pvname, value, **kwargs):
+                with values_lock:
+                    if pvname not in values.keys():
+                        values[pvname] = [value]
+                    else:
+                        values[pvname].append(value)
+
+            linac, zone, cav = get_linac_zone_cavity()
+
+            # Can't walk higher than ODVH, and it shouldn't even try
+            pre_walk_gset = cav.gset.value
+            with self.assertRaises(Exception) as context:
+                cav.walk_gradient(100)
+            post_walk_gset = cav.gset.value
+
+            self.assertEqual(pre_walk_gset, post_walk_gset,
+                             "walk_gradient tried to change GSET with request higher than ODVH")
+
+            cav.gset.put(cav.gset_min + 3, wait=True)
+            time.sleep(0.01)
+            start = cav.gset_min + 3
+            exp = [start - 1, start - 2, start - 2.5]
+            cav.gset.add_callback(track_values_cb)
+            cav.walk_gradient(gset=cav.gset.value-2.5, settle_time=0.01, wait_for_ramp=False, step_size=1,
+                              wait_interval=0.1)
+
             with values_lock:
-                if pvname not in values.keys():
-                    values[pvname] = [value]
-                else:
-                    values[pvname].append(value)
+                result = values[cav.gset.pvname].copy()
 
-        cav = get_cavity()
-
-        # Can't walk higher than ODVH, and it shouldn't even try
-        pre_walk_gset = cav.gset.value
-        with self.assertRaises(Exception) as context:
-            cav.walk_gradient(100)
-        post_walk_gset = cav.gset.value
-
-        self.assertEqual(pre_walk_gset, post_walk_gset,
-                         "walk_gradient tried to change GSET with request higher than ODVH")
-
-        cav.gset.put(cav.gset_min + 3, wait=True)
-        time.sleep(0.01)
-        start = cav.gset_min + 3
-        exp = [start - 1, start - 2, start - 2.5]
-        cav.gset.add_callback(track_values_cb)
-        cav.walk_gradient(gset=cav.gset.value-2.5, settle_time=0.01, wait_for_ramp=False, step_size=1,
-                          wait_interval=0.1)
-
-        with values_lock:
-            result = values[cav.gset.pvname].copy()
-
-        self.assertListEqual(exp, result)
-
+            # Since we enforce software-based gradient ramping, we need to just check that the specific values were included
+            # The exact  ramping values used will swamp the few step sizes we expect.
+            for value in exp:
+                self.assertIn(value, result)
+        finally:
+            cav.gset.put(pre_walk_gset)
 
     def test_set_gradient(self):
-        cav = get_cavity()
+        linac, zone, cav = get_linac_zone_cavity()
         with self.assertRaises(Exception) as context:
             cav.set_gradient(0.1, settle_time=0, wait_for_ramp=False)
 
@@ -172,7 +142,7 @@ class TestCavity(TestCase):
         cav.gset_max = old_max
 
     def test_is_cavity_tuning(self):
-        cav = get_cavity(controls_type='3.0')
+        linac, zone, cav = get_linac_zone_cavity(controls_type='3.0')
         cfqe_old = cav.cfqe.value
         try:
             # Tuning threshold is set to 10 for test cases
@@ -187,7 +157,7 @@ class TestCavity(TestCase):
             cav.cfqe.put(cfqe_old)
 
     def test_set_gradient_tuning(self):
-        cav = get_cavity(controls_type='3.0')
+        linac, zone, cav = get_linac_zone_cavity(controls_type='3.0')
         cfqe_old = cav.cfqe.value
         gset_old = cav.gset.value
 
@@ -205,10 +175,11 @@ class TestCavity(TestCase):
             cav.gset.put(gset_old)
             cav.cfqe.put(cfqe_old)
 
-        self.assertTrue((end - start).total_seconds() > tuning_time, f"Cavity did not wait for tuning (<{tuning_time})")
+        self.assertTrue((end - start).total_seconds() >= tuning_time,
+                        f"Cavity did not wait for tuning ({(end - start).total_seconds()} s < {tuning_time} s)")
 
     def test_set_gradient_ramping(self):
-        cav = get_cavity()
+        linac, zone, cav = get_linac_zone_cavity()
 
         ramp_time = 0.25
         gset = cav.gset.value
@@ -229,7 +200,7 @@ class TestCavity(TestCase):
 
     def test_set_gradient_ramping_interactive(self):
         # This test requires user input since the ramp_time will exceed 10s
-        cav = get_cavity()
+        linac, zone, cav = get_linac_zone_cavity()
 
         ramp_time = 0.5
         gset = cav.gset.value
@@ -243,7 +214,7 @@ class TestCavity(TestCase):
         t1.join()
 
     def test_restore_pset(self):
-        cav = get_cavity()
+        linac, zone, cav = get_linac_zone_cavity()
         exp = cav.pset_init
 
         cav.pset.put(exp + 1, wait=True)
