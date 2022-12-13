@@ -944,7 +944,7 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
                                 cav.set_gradient(gset=new_gsets[cav.name], settle_time=0, force=True)
                                 bad_state = False
                             except Exception as ex:
-                                logger.error(f"Bad state detected: {ex}")
+                                logger.error(f"Bad state detected or trouble with cavity: {ex}")
                                 response = input(f"Try to setup for this sample again? (n|y): ").lower().lstrip()
                                 if not response.startswith('y'):
                                     logger.info("Exiting sample iteration at user request post-exception.")
