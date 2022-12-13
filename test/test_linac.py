@@ -273,4 +273,4 @@ class TestZone(TestCase):
         # This should be a relatively
         g5 = zone.cavities['1L11-5'].gset.value
         g7 = zone.cavities['1L11-7'].gset.value
-        zone.check_percent_heat_change(gradients=[None, None, None, None, g5+1, None, g7+1, None], percentage=10)
+        zone.check_percent_heat_change(gradients=[None, None, None, None, g5+0.1, None, g7+0.1, None], percentage=10)
