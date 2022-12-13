@@ -164,12 +164,19 @@ class TestCavity(TestCase):
         def do_tune():
             cav.cfqe.put(0)
 
-        tuning_time = 0.25
+        tuning_time = 1
         try:
-            cav.cfqe.put(20)
+            cav.cfqe.put(20, wait=True)
+            time.sleep(0.05)
+
             start = datetime.now()
             threading.Timer(tuning_time, do_tune).start()
-            cav.set_gradient(max(cav.gset_min, cav.gset.value-0.01), settle_time=0)
+            if cav.gset.value > cav.gset_min:
+                cav.set_gradient(max(cav.gset_min, cav.gset.value-0.01), settle_time=0)
+            else:
+                cav.set_gradient(cav.gset_min + 0.01, settle_time=0)
+            time.sleep(0.05)
+
             end = datetime.now()
         finally:
             cav.gset.put(gset_old)
