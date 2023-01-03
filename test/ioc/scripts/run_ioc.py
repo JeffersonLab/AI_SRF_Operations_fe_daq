@@ -219,7 +219,8 @@ def setup_cavities() -> None:
         if pv_name.endswith("GSET"):
             PVs[pv_name].add_callback(gset_cb)
     caput_many(pv_list, val_list, wait=True)
-    print("RF PVs Done!")
+    time.sleep(0.05)
+    logging.debug("Finished Initializing Cavity PVs")
 
 
 def get_ced_elements(ced_url: str) -> List[Dict]:
