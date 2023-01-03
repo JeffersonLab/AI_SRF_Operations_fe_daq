@@ -20,7 +20,7 @@ PVs = {}
 fe_onset = {}
 prefix = "adamc:"
 fe_active = {}  # Is a cavity field emitting? [str(pvname), bool].  Managed by gset_cb
-JT_valves = {}  # type: Dict[str, JT_Values]
+JT_valves = {}  # type: Dict[str, JTValve]
 
 # Gets changed in main and callback threads
 gc_lock = threading.Lock()
@@ -165,8 +165,7 @@ def setup_cavities() -> None:
 
         # Setup a callback that will make radiation signal appear above FE onset
         PVs[pv_name] = PV(pv_name)
-        PVs[pv_name].add_callback(gset_cb)
-        fe_onset[pv_name] = max(float(max_gset) - 1, 7)  # FE onset here is simply one less than max gradient
+    logging.debug("Finished Creating Cavity PVs")
 
         # We don't want to attached the gset_cb to this.
         pv_name = f"{prefix}{epics_name}GMES"
@@ -174,6 +173,11 @@ def setup_cavities() -> None:
         pv_list.append(pv_name)
         val_list.append(gradient + np.random.uniform(0, max_gradient_noise, 1)[0])
 
+    logging.debug("Initializing Cavity PVs")
+    time.sleep(0.05)
+    for pv_name in pv_list:
+        if pv_name.endswith("GSET"):
+            PVs[pv_name].add_callback(gset_cb)
     caput_many(pv_list, val_list, wait=True)
     print("RF PVs Done!")
 
@@ -256,6 +260,7 @@ class JTValve:
 
 
 def setup_jt_valves():
+    logging.debug("Setting Up JT Valves")
     global JT_valves
     for linac in ['1L', '2L']:
         for zone in ['02', '03', '04', '05', '06', '07', '08', '09',
@@ -263,6 +268,7 @@ def setup_jt_valves():
                      '20', '21', '22', '23', '24', '25', '26']:
             z = f"{linac}{zone}"
             JT_valves[z] = JTValve(zone=z)
+    logging.debug("Done setting Up JT Valves")
 
 
 if __name__ == "__main__":
@@ -274,6 +280,7 @@ if __name__ == "__main__":
     p_jt_high = 0
     # p_jt_high = 1e-5
 
+    logging.debug("Entering main run loop.")
     while True:
         # Make this slow enough so my unit tests have a chance to make some changes without
         # being overwritten.  0.01 was just a little too fast
