@@ -103,6 +103,12 @@ def setup_ndx() -> None:
         PVs[pv_name] = PV(pv_name)
 
 
+def append_pairs(names: List[str], values: List[float], name: str, value: float):
+    """Append a name and value to arrays in the same order."""
+    names.append(name)
+    values.append(value)
+
+
 def setup_cavities() -> None:
     """Creates cavities from CED data and adds to linac and zone.  Expects _setup_zones to have been run."""
     ced_params = 't=CryoCavity&p=EPICSName&p=CavityType&p=MaxGSET&p=OpsGsetMax&p=Bypassed&p=Length&p=Housed_by' \
@@ -130,48 +136,82 @@ def setup_cavities() -> None:
         max_gset = float(max_gset)
 
         # Set the ODVH records to the CED values
-        pv_name = f"{prefix}{epics_name}ODVH"
-        pv_list.append(pv_name)
-        val_list.append(max_gset)
+        append_pairs(pv_list, val_list, f"{prefix}{epics_name}ODVH", max_gset)
 
         # Set the cavities to RF On state.  C100s/C75s are RFONr.  C25s/C50s are a weird bitword thing.
-        pv_name = f"{prefix}{epics_name}RFONr"
-        pv_list.append(pv_name)
-        val_list.append(1)
+        append_pairs(pv_list, val_list, f"{prefix}{epics_name}RFONr", 1)
 
         # MBBI. ACK1.B6 is zone RF on, so assign 64 (=2^6) to set B6 to 1 (B# is zero-indexed)
-        pv_name = f"{prefix}{epics_name}ACK1"
-        pv_list.append(pv_name)
-        val_list.append(64)
+        append_pairs(pv_list, val_list, f"{prefix}{epics_name}ACK1", 64)
 
-        # Set the cavities up so that they are at the minimum stable gradient for operations
-        pv_name = f"{prefix}{epics_name}GSET"
-        pv_list.append(pv_name)
+        # FE onset here is simply one less than max gradient
+        fe_onset[f"{prefix}{epics_name}GSET"] = max(float(max_gset) - 1, 7)
 
         if cavity_type == "C100":
-            gradient = np.random.uniform(5, max_gset)
+            # Gradient PVs
+            gradient = 0 if bypassed else np.random.uniform(5, max_gset)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GSET", gradient)
+            gmes = gradient + np.random.uniform(0, max_gradient_noise, 1)[0]
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GMES", gmes)
+
+            # Tuner info
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}CFQE", 0)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}DETAHZHI", 10)
         elif cavity_type == "C75":
-            gradient = np.random.uniform(5, max_gset)
+            # Gradient PVs
+            gradient = 0 if bypassed else np.random.uniform(5, max_gset)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GSET", gradient)
+            gmes = gradient + np.random.uniform(0, max_gradient_noise, 1)[0]
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GMES", gmes)
+
+            # Tuner info
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}CFQE", 0)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}DETAHZHI", 10)
         elif cavity_type == "C50":
-            gradient = np.random.uniform(3, max_gset)
+            # Gradient PVs
+            gradient = 0 if bypassed else np.random.uniform(3, max_gset)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GSET", gradient)
+            gmes = gradient + np.random.uniform(0, max_gradient_noise, 1)[0]
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GMES", gmes)
+            # val_list.append(0 if bypassed else np.random.uniform(3, max_gset))
+
+            # Tuner info
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}TDETA", 0)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}TDETA_N", 10)
         elif cavity_type == "C25":
-            gradient = np.random.uniform(3, max_gset)
+            # Gradient PVs
+            gradient = 0 if bypassed else np.random.uniform(3, max_gset)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GSET", gradient)
+            gmes = gradient + np.random.uniform(0, max_gradient_noise, 1)[0]
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GMES", gmes)
+            # val_list.append(0 if bypassed else np.random.uniform(3, max_gset))
+
+            # Tuner info
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}TDETA", 0)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}TDETA_N", 10)
         elif cavity_type == "P1R":
-            gradient = np.random.uniform(5, max_gset)
-        if bypassed:
-            gradient = 0
+            # Gradient PVs
+            gradient = 0 if bypassed else np.random.uniform(5, max_gset)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GSET", gradient)
+            gmes = gradient + np.random.uniform(0, max_gradient_noise, 1)[0]
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}GMES", gmes)
+            # val_list.append(0 if bypassed else np.random.uniform(5, max_gset))
 
-        val_list.append(gradient)
+            # Tuner info
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}CFQE", 0)
+            append_pairs(pv_list, val_list, f"{prefix}{epics_name}DETAHZHI", 10)
 
-        # Setup a callback that will make radiation signal appear above FE onset
+    # Setup a callback that will make radiation signal appear above FE onset
+    logging.debug("Creating Cavity PVs")
+    for pv_name in pv_list:
         PVs[pv_name] = PV(pv_name)
     logging.debug("Finished Creating Cavity PVs")
 
-        # We don't want to attached the gset_cb to this.
-        pv_name = f"{prefix}{epics_name}GMES"
-        PVs[pv_name] = PV(pv_name)
-        pv_list.append(pv_name)
-        val_list.append(gradient + np.random.uniform(0, max_gradient_noise, 1)[0])
+    # We don't want to attached the gset_cb to this.
+    # pv_name = f"{prefix}{epics_name}GMES"
+    # PVs[pv_name] = PV(pv_name)
+    # pv_list.append(pv_name)
+    # val_list.append(gradient + np.random.uniform(0, max_gradient_noise, 1)[0])
 
     logging.debug("Initializing Cavity PVs")
     time.sleep(0.05)
