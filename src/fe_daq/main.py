@@ -7,13 +7,14 @@ from datetime import datetime
 
 from fe_daq.linac import LinacFactory
 from fe_daq import app_config as config
+from fe_daq.exceptions import UserScanAbort
 
 import procedures
 
 
 def sigint_handler(sig, frame):
-    logging.info("Received SIGINT signal (Control-c).  Exiting.")
-    sys.exit(1)
+    logging.info("Received SIGINT signal (Control-c).  Aborting.")
+    raise UserScanAbort("Received SIGINT (Control-C).")
 
 
 def init_logging(log_dir: str, run_log: str) -> None:
@@ -187,6 +188,7 @@ def main() -> int:
                                                             n_cavities=n_cavities, max_cavity_steps=max_cavity_steps)
             finally:
                 # Put the PSETs back where you found them.  User may exit mid scan via exception.  Always try to run
+                logger.info("Restoring PSETS")
                 linac.restore_psets()
 
         elif args.command == 'simple_gradient_scan':
@@ -209,6 +211,7 @@ def main() -> int:
             finally:
                 # Put the PSETs back where you found them.  If the user exits in the middle of the scan, we want to
                 # return PSETs no matter what.
+                logger.info("Restoring PSETS")
                 linac.restore_psets()
         elif args.command == 'random_sample_gradient_scan':
             print(args)
@@ -234,11 +237,16 @@ def main() -> int:
             finally:
                 # Put the PSETs back where you found them.  If the user exits in the middle of the scan, we want to
                 # return PSETs no matter what.
+                logger.info("Restoring PSETS")
                 linac.restore_psets()
 
 
         else:
             raise ValueError("Command required. fe_onset, gradient_scan")
+
+    except UserScanAbort as ex:
+        logger.info(f"User requested abort: {ex}")
+        return 1
 
     except Exception as ex:
         logging.exception("Fatal exception raised.  Exiting.")
