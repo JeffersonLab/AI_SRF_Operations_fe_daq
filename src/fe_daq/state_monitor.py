@@ -50,6 +50,9 @@ def get_hv_read_back_cb(target_hv: float, threshold: float = 0.15):
 def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) -> callable:
     """A generic callback generator for monitoring PVs that need to stay within a certain threshold."""
 
+    # Simple string instead of an enum - values can be high, low, ok
+    prev = 'ok'
+
     if low is None and high is None:
         raise ValueError("Either low or high must be specified")
     if low is not None and high is not None:
@@ -58,7 +61,7 @@ def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) 
 
     def threshold_cb(pvname: str, value: float, **kwargs) -> None:
         # Note low, high are nonlocal, but do not get modified
-        nonlocal low, high
+        nonlocal low, high, prev
         is_low = False
         is_high = False
         if low is not None:
@@ -69,11 +72,14 @@ def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) 
             if value > high:
                 is_high = True
 
-        if not is_low and not is_high:
+        if prev != 'ok' and not is_low and not is_high:
+            prev = 'ok'
             StateMonitor.threshold_recovered(pvname=pvname, low=low, high=high, value=value)
-        elif is_low:
+        elif prev != 'low' and is_low:
+            prev = 'low'
             StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=low, kind='<')
-        elif is_high:
+        elif prev != 'high' and is_high:
+            prev = 'high'
             StateMonitor.threshold_exceeded(pvname=pvname, value=value, threshold=high, kind='>')
 
     return threshold_cb
