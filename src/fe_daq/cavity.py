@@ -282,7 +282,7 @@ class Cavity:
             raise ValueError(msg)
 
     def _set_gradient(self, gset: float, settle_time: float, wait_for_ramp: bool, ramp_timeout: float,
-                      gradient_epsilon: float) -> None:
+                      gradient_epsilon: float, interactive: bool = True) -> None:
         # Instead of trying to watch tuner status, etc., we just set the gradient, then sleep some requested amount of
         # time.  This will need to be approached differently if used in a more general purpose application.
         # C100's will ramp gradient for you, but we need to wait for it.
@@ -307,22 +307,27 @@ class Cavity:
 
             if ramp_started:
                 # Here we have to wait for the gradient to finish ramping, assuming it actually started
-                logger.info(f"{self.name}: waiting for gradient to ramp")
+                # logger.info(f"{self.name}: waiting for gradient to ramp")
                 start_ramp = datetime.now()
                 while self.is_gradient_ramping():
                     StateMonitor.monitor(0.1)
                     if (datetime.now() - start_ramp).total_seconds() > ramp_timeout:
-                        logger.warning(f"{self.name} is taking a long time to ramp.")
-                        response = input(
-                            f"Waited {ramp_timeout} seconds for {self.name} to ramp.  Continue? (n|y): "
-                        ).lstrip().lower()
-                        if not response.startswith("y"):
-                            msg = f"User requested exit while waiting on {self.name} to ramp."
-                            logger.error(msg)
-                            raise RuntimeError(msg)
+                        logger.warning(f"{self.name}: gradient ramp timed out.")
+                        if interactive:
+                            response = input(
+                                f"Waited {ramp_timeout} seconds for {self.name} to ramp.  Continue? (n|y): "
+                            ).lstrip().lower()
+                            if not response.startswith("y"):
+                                msg = f"User requested exit while waiting on {self.name} to ramp."
+                                logger.error(msg)
+                                raise RuntimeError(msg)
+                        else:
+                            raise RuntimeError(f"{self.name}: gradient ramp timed out ({ramp_timeout})")
+
+                        # If we made it here, then a user decided to keep going.
                         start_ramp = datetime.now()
-            else:
-                logger.info(f"{self.name}: did not ramp gradient")
+            # else:
+            #     logger.info(f"{self.name}: did not ramp gradient")
 
         if settle_time > 0:
             logger.info(f"{self.name}: Waiting {settle_time} seconds for cryo to adjust")
