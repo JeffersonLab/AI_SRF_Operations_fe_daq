@@ -154,7 +154,6 @@ class Cavity:
 
             while self.is_tuning_required():
                 time.sleep(0.05)
-                # StateMonitor.monitor(0.05)
                 if (datetime.now() - start_ramp).total_seconds() > tune_timeout:
                     logger.warning(f"{self.name} is taking a long time to tune.")
                     response = input(f"Waited {tune_timeout} seconds for {self.name} to tune.  "
@@ -171,25 +170,6 @@ class Cavity:
                         msg = f"{self.name}:  Timed out waiting on tuner."
                         logger.error(msg)
                         raise RuntimeError(msg)
-
-            logger.info(f"{self.name}: Done waiting for tuner")
-    #
-    # def _wait_for_tuning(self, timeout: float):
-    #     """Check the status of the tuners and wait at most timeout seconds if tuning is required"""
-    #     start_ramp = datetime.now()
-    #     needed_tuning = False
-    #     margin = 0
-    #     while self.is_tuning_required(margin=margin):
-    #         margin = self.tuner_recovery_margin
-    #         needed_tuning = True
-    #         logger.info(f"{self.name}: Waiting {timeout} seconds for tuner to finish")
-    #         time.sleep(0.05)
-    #         if (datetime.now() - start_ramp).total_seconds() > timeout:
-    #             logger.warning(f"{self.name} timed out waiting for tuner.")
-    #             raise RuntimeError(f"{self.name} tuner timed out")
-    #
-    #     if needed_tuning:
-    #         logger.info(f"{self.name}: Done tuning")
 
     def get_jiggled_pset_value(self, delta: float) -> float:
         """Calculate a random.uniform offset from pset_init of maximum +/- 5.  No changes to EPICS"""
@@ -283,6 +263,10 @@ class Cavity:
 
     def _set_gradient(self, gset: float, settle_time: float, wait_for_ramp: bool, ramp_timeout: float,
                       gradient_epsilon: float, interactive: bool = True) -> None:
+        """Internal call to set a cavities gradient.
+
+        If interactive, user will be prompted on gradient ramping timeouts.  Otherwise it raises an exception.
+        """
         # Instead of trying to watch tuner status, etc., we just set the gradient, then sleep some requested amount of
         # time.  This will need to be approached differently if used in a more general purpose application.
         # C100's will ramp gradient for you, but we need to wait for it.
@@ -437,7 +421,7 @@ class Cavity:
         self._wait_for_heater_margins(timeout=60)
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
-                     force: bool = False, gradient_epsilon: float = 0.05):
+                     force: bool = False, gradient_epsilon: float = 0.05, interactive: bool = True):
         """Set a cavity's gradient and wait for supporting systems to compensate for the change.
 
         New change can't be more than 1 MV/m away from current value, without force.  This attempts to wait for a cavity
@@ -451,6 +435,7 @@ class Cavity:
             ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
             force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
             gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
+            interactive: Should the user be prompted for interactive process control
 
         """
         raise NotImplementedError("Must be implemented by child classes")
@@ -550,7 +535,7 @@ class LLRF1Cavity(Cavity):
         return math.fabs(self.tdeta.value) > (self.tdeta_n.value - margin)
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
-                     force: bool = False, gradient_epsilon: float = 0.05):
+                     force: bool = False, gradient_epsilon: float = 0.05, interactive: bool = True):
         """Set a cavity's gradient and wait for supporting systems to compensate for the change.
 
         New change can't be more than 1 MV/m away from current value, without force.  LLRF 1.0 cavities (C25/C50s) do
@@ -564,13 +549,14 @@ class LLRF1Cavity(Cavity):
             ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
             force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
             gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
+            interactive: Should the user be prompted for interactive process control
 
         """
 
         logger.info(f"{self.name}: Setting gradient from {self.gset.value} to {gset}.")
         self._validate_requested_gradient(gset=gset, force=force)
         self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
-                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
 
 
 class LLRF2Cavity(Cavity):
@@ -657,7 +643,7 @@ class LLRF2Cavity(Cavity):
         return is_ramping
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp: bool = True, ramp_timeout: float = 20,
-                     force: bool = False, gradient_epsilon: float = 0.05):
+                     force: bool = False, gradient_epsilon: float = 0.05, interactive: bool = True):
         """Set a cavity's gradient and wait for supporting systems to compensate for the change.
 
         New change can't be more than 1 MV/m away from current value, without force.  This attempts to wait for a cavity
@@ -673,6 +659,7 @@ class LLRF2Cavity(Cavity):
             ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
             force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
             gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
+            interactive: Should the user be prompted for interactive process control
 
         """
 
@@ -686,7 +673,7 @@ class LLRF2Cavity(Cavity):
         # It's safest to always ramp, since the worst case scenario is that we wait a little longer while than
         # necessary at the cost of not exceeding cryo, etc. limits.
         self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
-                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
         # if self.fcc_firmware_version > 2019:
         #     # Newer firmware versions do not ramp the gradient and will trip if you move more than ~0.2 MV/m in a step
         #     self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
@@ -774,7 +761,7 @@ class LLRF3Cavity(Cavity):
         return is_ramping
 
     def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
-                     force: bool = False, gradient_epsilon: float = 0.05):
+                     force: bool = False, gradient_epsilon: float = 0.05, interactive: bool = True):
         """Set a cavity's gradient and wait for supporting systems to compensate for the change.
 
         New change can't be more than 1 MV/m away from current value, without force.  This attempts to wait for a cavity
@@ -788,6 +775,7 @@ class LLRF3Cavity(Cavity):
             ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
             force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
             gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
+            interactive: Should the user be prompted for interactive process control
 
         """
 
@@ -795,6 +783,6 @@ class LLRF3Cavity(Cavity):
         self._validate_requested_gradient(gset=gset, force=force)
         # self.wait_for_tuning()
         self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
-                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
+                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
         # self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp, ramp_timeout=ramp_timeout,
         #                    gradient_epsilon=gradient_epsilon)

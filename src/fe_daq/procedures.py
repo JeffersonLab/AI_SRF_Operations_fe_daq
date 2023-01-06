@@ -1048,14 +1048,14 @@ def collect_data_at_gradients(cavs: List[Cavity], new_gsets: Dict[str, float], o
                 raise UserScanAbort("Aborting after error rolling back gradient changes.")
 
 
-def update_cavity_gset(cavity: Cavity, gset: float, settle: float, force: bool) -> bool:
+def update_cavity_gset(cavity: Cavity, gset: float, settle: float, force: bool, interactive: bool) -> bool:
     """Update a cavity and return true/false based on success/error."""
 
     success = False
     try:
         # Since we're setting multiple cavities, we will enforce a single common settle time after
         # all are set.
-        cavity.set_gradient(gset=gset, settle_time=0, force=True)
+        cavity.set_gradient(gset=gset, settle_time=settle, force=force, interactive=interactive)
         success = True
     except UserScanAbort:
         raise
@@ -1071,13 +1071,14 @@ def update_cavity_gsets_parallel(cavs: List[Cavity], new_gsets: Dict[str, float]
     time.sleep(0.1)
     status = Status.FAIL
     failed = [cav for cav in cavs]
+    interactive = False
     try:
         StateMonitor.check_state()
         with concurrent.futures.ThreadPoolExecutor(max_workers=len(cavs)) as executor:
             futures = {}
             for cav in cavs:
                 logger.debug(f"Submitting {cav.name} for parallel GSET update")
-                future = executor.submit(update_cavity_gset, cav, new_gsets[cav.name], settle, force)
+                future = executor.submit(update_cavity_gset, cav, new_gsets[cav.name], settle, force, interactive)
                 futures[future] = cav
 
             for future in concurrent.futures.as_completed(futures):
