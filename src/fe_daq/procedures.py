@@ -1,15 +1,21 @@
+import concurrent.futures
 import logging
 import math
 import random
+import time
+import traceback
+from enum import Enum
 
 import numpy as np
 from datetime import datetime, timedelta
 from operator import attrgetter
-from typing import Union, List, Optional
+from typing import Union, List, Optional, Dict, Tuple
+from typing.io import TextIO
 
 from fe_daq.cavity import Cavity
 from fe_daq.linac import Zone, Linac
 from fe_daq.state_monitor import StateMonitor
+from fe_daq.exceptions import UserScanAbort
 
 logger = logging.getLogger(__name__)
 
@@ -575,7 +581,8 @@ def run_gradient_scan_levelized_walk(linac: Linac, avg_time: float, num_steps: i
             logger.info(f"Running iteration {i + 1} of {num_steps}")
             with open(data_file, mode="a") as f:
                 f.write(f"# active zones: {zone_names}, step_size={step_size}\n")
-                f.write(f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
+                f.write(
+                    f"#settle_start,settle_end,avg_start,avg_end,settle_dur,avg_dur,cavity_name,cavity_epics_name\n")
 
                 # Get the randomly ordered set of cavities to update
                 if len(allowable_cavities) == 0:
@@ -747,7 +754,6 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
     """
 
     logger.info(f"Starting simple_gradient_scan")
-
     zone_names = list(linac.zones.keys())
     logger.info("Setting NDX to operations settings")
     linac.set_ndx_for_operations()
@@ -773,67 +779,72 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                 gset_min = cavity.gset_min
                 logger.info(f"Scanning {cavity.name}.  gset_curr={gset_curr}, gset_min={gset_min}, gset_max={gset_max}")
 
-                # Figure out the applicable gradient steps for this cavity
-                gsets = []
+                # Figure out the applicable gradient steps for this cavity.  First include current value and go up.
+                gsets_up = [gset_curr]
                 for i in range(1, max_cavity_steps + 1):
                     gradient = gset_curr + (step_size * i)
                     if gradient >= gset_max:
                         logger.info(f"{cavity.name}: Limited to +{gset_max - gset_curr} MV/m above initial.")
-                        gsets.append(gset_max)
+                        gsets_up.append(gset_max)
                         break
-                    gsets.append(gradient)
+                    gsets_up.append(gradient)
 
+                # Figure out the values to scan going down.
                 for i in range(1, max_cavity_steps + 1):
+                    gsets_down = []
                     gradient = gset_curr - (step_size * i)
                     if gradient <= gset_min:
                         logger.info(f"{cavity.name}: Limited to -{gset_curr - gset_min} MV/m below initial.")
-                        gsets.append(gset_min)
+                        gsets_down.append(gset_min)
                         break
-                    gsets.append(gradient)
+                    gsets_down.append(gradient)
 
-                logger.info(f"{cavity.name}:  GSETs to scan {gsets}")
+                for gsets in [gsets_up, gsets_down]:
+                    logger.info(f"{cavity.name}:  GSETs to scan {gsets}")
+                    for gset_next in gsets:
+                        try:
+                            gset_curr = cavity.gset.value
+                            logger.info("Jiggling linac phases within +/- 5 degrees of initial")
+                            linac.jiggle_psets(5.0)
 
-                for gset_next in gsets:
-                    try:
-                        gset_curr = cavity.gset.value
-                        logger.info("Jiggling linac phases within +/- 5 degrees of initial")
-                        linac.jiggle_psets(5.0)
+                            # Here we are allowing larger step sizes than 1 MV/m (force=True)
+                            StateMonitor.check_state()
+                            logger.info(f"{cavity.name}:  Stepping gradient {gset_curr} => {gset_next}.")
+                            cavity.set_gradient(gset=gset_next, settle_time=settle_time, wait_for_ramp=True, force=True)
 
-                        # Here we are allowing larger step sizes than 1 MV/m (force=True)
-                        StateMonitor.check_state()
-                        logger.info(f"{cavity.name}:  Stepping gradient {gset_curr} => {gset_next}.")
-                        cavity.set_gradient(gset=gset_next, settle_time=settle_time, wait_for_ramp=True, force=True)
+                            # We expect set_gradient to possible wait for cryo.  This scan will likely not wait for cryo.
+                            settle_end = datetime.now()
+                            settle_start = settle_end - timedelta(seconds=settle_time)
 
-                        # We expect set_gradient to possible wait for cryo.  This scan will likely not wait for cryo.
-                        settle_end = datetime.now()
-                        settle_start = settle_end - timedelta(seconds=settle_time)
+                            logger.info(f"Waiting on averaging time ({avg_time} seconds)")
+                            avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
 
-                        logger.info(f"Waiting on averaging time ({avg_time} seconds)")
-                        avg_start, avg_end = StateMonitor.monitor(duration=avg_time)
+                            # Write out the timestamps for this sample
+                            logger.info("Writing to data log")
+                            # f.write(
+                            write_data_index_row(f, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
+                                                 avg_end=avg_end, settle_time=settle_time, avg_time=avg_time,
+                                                 cavity_name=cavity.name, cavity_epics_name=cavity.epics_name)
+                            f.flush()
 
-                        # Write out the timestamps for this sample
-                        logger.info("Writing to data log")
-                        # f.write(
-                        write_data_index_row(f, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
-                                             avg_end=avg_end, settle_time=settle_time, avg_time=avg_time,
-                                             cavity_name=cavity.name, cavity_epics_name=cavity.epics_name)
-                        f.flush()
+                        except UserScanAbort:
+                            raise
+                        except Exception as ex:
+                            msg = f"Exception occurred during gradient scan\n{ex}"
+                            logger.error(msg)
+                            response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
+                            if not response.startswith('y'):
+                                logger.info("Exiting after error based on user response.")
+                                logger.info(f"{cavity.name}: Attempting to restoring cavity gradient")
+                                cavity.restore_gset()
+                                linac.restore_psets()
+                                raise ex
+                            else:
+                                logging.info("Continuing scan")
 
-                    except Exception as ex:
-                        msg = f"Exception occurred during gradient scan\n{ex}"
-                        logger.error(msg)
-                        response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
-                        if not response.startswith('y'):
-                            logger.info("Exiting after error based on user response.")
-                            logger.info(f"{cavity.name}: Attempting to restoring cavity gradient")
-                            cavity.restore_gset()
-                            linac.restore_psets()
-                            raise ex
-                        else:
-                            logging.info("Continuing scan")
-
-                # Walk the gradient back, and wait one second before each step.
-                cavity.restore_gset(settle_time=1)
+                    # Walk the gradient back, and wait one second before each step.
+                    logger.info(f"{cavity.name}: Restoring original gradient.")
+                    cavity.restore_gset(settle_time=1)
         finally:
             logger.info("Restoring PSETs.")
             linac.restore_psets()
@@ -883,127 +894,297 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
     offset_list = np.array(offset_list)
 
     with open(data_file, mode="a") as f:
-        try:
-            write_data_index_header(f, type='simple_gradient_scan', active_zones=zone_names,
-                                    bypassed_cavities=bypassed_cavity_names, gradient_delta_range=offset_list)
+        write_data_index_header(f, type='random_sample_gradient_scan', active_zones=zone_names,
+                                bypassed_cavities=bypassed_cavity_names, gradient_delta_range=offset_list)
 
-            for i in range(1, n_samples + 1):
-                logger.info(f"Starting sample round {i} of {n_samples}.")
-                try:
-                    # Sample the cavities to be adjusted this time
-                    available_cavs = list(available_cavities.values())
-                    cavs = sorted(random.sample(available_cavs, n_cavities), key=lambda x: x.name)
-                    # Track which gsets are changing for each zone involved
-                    zones_gsets = {}
-                    # Track the new gsets for the cavities involved
-                    new_gsets = {}
-                    old_gsets = {}
-                    logger.info(f"Adjusting {','.join([cav.name for cav in cavs])}")
-                    update_msg = ""
+        for i in range(1, n_samples + 1):
+            logger.info(f"Starting sample round {i} of {n_samples}.")
+            try:
+                cavs, new_gsets, old_gsets, zones_gsets = get_random_cavity_gradients_changes(
+                    population=list(available_cavities.values()),
+                    n_cavities=n_cavities, offset_list=offset_list)
+
+                # Check that the gradients won't affect heat too much in a given CM
+                skip = False
+                for zone in zones_gsets.keys():
+                    try:
+                        rel_change, new_heat, old_heat = zone.check_percent_heat_change(gradients=zones_gsets[zone])
+                        logger.info(f"{zone.name}: Expected heat change OK.  {np.round(old_heat, 1)}W ->"
+                                    f" {np.round(new_heat, 1)}W ({np.round(rel_change, 1)}%)")
+                    except Exception as ex:
+                        logger.error(ex)
+                        skip = True
+                        break
+                if skip:
+                    logger.info("Skipping this sample round due to large heat changes.")
+                    continue
+
+                # Jiggle PSETs to make predictions slightly more robust to a likely source of noise
+                linac.jiggle_psets(delta=5.0)
+
+                # Do the updates, and track in the lookup index file.
+                collect_data_at_gradients(cavs=cavs, new_gsets=new_gsets, old_gsets=old_gsets,
+                                          settle_time=settle_time, avg_time=avg_time, file=f)
+
+            except UserScanAbort:
+                # Don't do anything if the user requested an abort.  Just need to bypass other exception handling at
+                # this layer
+                raise
+            except Exception as ex:
+                logger.error(f"Exception raised: {ex}")
+                response = input(f"Restore cavities to initial values? (n|y): ").lower().lstrip()
+                if response.startswith('y'):
+                    logger.info("Attempting to restore PSETs and GSETs")
                     for cav in cavs:
-                        cav_offsets = offset_list[(offset_list + cav.gset.value > cav.gset_min) &
-                                                  (offset_list + cav.gset.value < cav.gset_max)].tolist()
-                        if len(cav_offsets) > 0:
-                            offset = random.sample(cav_offsets, k=1)[0]
-                        else:
-                            offset = 0
-                            logger.info(f"{cav.name}: No valid offsets.  Current, Min, Max GSET: {cav.gset.value},"
-                                        f" {cav.gset_min}, {cav.gset_max}.  Cavity unchanged.")
-                        new_gsets[cav.name] = cav.gset.value + offset
-                        old_gsets[cav.name] = cav.gset.value
-                        update_msg += f" {cav.name}: {np.round(cav.gset.value, 2)}->{np.round(new_gsets[cav.name], 2)}"
+                        logger.info(f"Restoring {cav.name}")
+                        cav.restore_pset()
+                        cav.restore_gset(settle_time=1)
+                response = input(f"Continue with next iteration of scan (n|y)? No aborts entire scan: ")
+                if response.lower().lstrip().startswith('n'):
+                    raise UserScanAbort(f"Requested abort after seeing exception '{ex}'.")
 
-                        if cav.zone not in zones_gsets.keys():
-                            zones_gsets[cav.zone] = [None] * 8
-                        zones_gsets[cav.zone][cav.cavity_number-1] = new_gsets[cav.name]
+    logger.info("Scan complete")
 
-                    logger.info(f"Applying these updates: {update_msg}")
-                    # Check that the gradients won't affect heat too much in a given CM
-                    skip = False
-                    for zone in zones_gsets.keys():
-                        try:
-                            rel_change, new_heat, old_heat = zone.check_percent_heat_change(gradients=zones_gsets[zone])
-                            logger.info(f"{zone.name}: Expected heat change OK.  {np.round(old_heat, 1)}W ->"
-                                        f" {np.round(new_heat, 1)}W ({np.round(rel_change, 1)}%)")
-                        except Exception as ex:
-                            logger.error(ex)
-                            skip = True
-                            break
-                    if skip:
-                        logger.info("Skipping this sample round due to large heat changes.")
-                        continue
 
-                    # Check that the Linac is in a good state before adjusting each cavity
-                    for cav in cavs:
-                        bad_state = True
-                        while bad_state:
-                            try:
-                                StateMonitor.check_state()
-                                # Since we're setting multiple cavities, we will enforce a single common settle time after
-                                # all are set.
-                                cav.set_gradient(gset=new_gsets[cav.name], settle_time=0, force=True)
-                                bad_state = False
-                            except Exception as ex:
-                                logger.error(f"Bad state detected or trouble with cavity: {ex}")
-                                response = input(f"Try to setup for this sample again? (n|y): ").lower().lstrip()
-                                if not response.startswith('y'):
-                                    logger.info("Exiting sample iteration at user request post-exception.")
-                                    raise ex
+def get_random_cavity_gradients_changes(population: List[Cavity], n_cavities: int,
+                                        offset_list: np.ndarray) -> Tuple[List[Cavity],
+                                                                          Dict[str, float],
+                                                                          Dict[str, float],
+                                                                          Dict[Zone, List[Optional[float]]]]:
+    """Determine the set of cavities to update and what their new gradient values should be.
 
-                    # Do the common settle time now
-                    logger.info(f"Waiting {settle_time} seconds for cryo to settle across ALL cavities.")
-                    settle_start = datetime.now()
-                    StateMonitor.monitor(duration=settle_time)
-                    settle_end = datetime.now()
+    This randomly samples n_cavities from the population list to be updated.  Then the cavity gradients are updated
+    by selecting an offset at random from the offset list and applying it to the current value.  Only offsets that
+    would respect the cavity's gset_min and gset_max attributes are considered, which may lead to a zero offset being
+    applied.
+    """
+    # Sample the cavities to be adjusted this time
+    cavs = sorted(random.sample(population, n_cavities), key=lambda x: x.name)
+    # Track which gsets are changing for each zone involved
+    zones_gsets = {}
+    # Track the new gsets for the cavities involved
+    new_gsets = {}
+    old_gsets = {}
+    logger.info(f"Adjusting {','.join([cav.name for cav in cavs])}")
+    update_msg = ""
+    for cav in cavs:
+        cav_offsets = offset_list[(offset_list + cav.gset.value > cav.gset_min) &
+                                  (offset_list + cav.gset.value < cav.gset_max)].tolist()
+        if len(cav_offsets) > 0:
+            offset = random.sample(cav_offsets, k=1)[0]
+        else:
+            offset = 0
+            logger.info(f"{cav.name}: No valid offsets.  Current, Min, Max GSET: {cav.gset.value},"
+                        f" {cav.gset_min}, {cav.gset_max}.  Cavity unchanged.")
+        new_gsets[cav.name] = cav.gset.value + offset
+        old_gsets[cav.name] = cav.gset.value
+        update_msg += f" {cav.name}: {np.round(cav.gset.value, 2)}->{np.round(new_gsets[cav.name], 2)}"
 
-                    # Do the data collection (averaging) time now
-                    avg_start = settle_end
-                    StateMonitor.monitor(duration=avg_time)
-                    avg_end = datetime.now()
+        if cav.zone not in zones_gsets.keys():
+            zones_gsets[cav.zone] = [None] * 8
+        zones_gsets[cav.zone][cav.cavity_number - 1] = new_gsets[cav.name]
 
-                    logger.info("Writing to data log")
-                    cav_names = [cav.name for cav in cavs]
-                    cav_epics_names = [cav.epics_name for cav in cavs]
-                    write_data_index_row(f, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
-                                         avg_end=avg_end, settle_time=settle_time, avg_time=avg_time, cavity_name=cav_names,
-                                         cavity_epics_name=cav_epics_names)
-                    f.flush()
+    logger.info(f"Sample will use these updates: {update_msg}")
 
-                    # Restore the changed gradients back
-                    # Check that the Linac is in a good state before adjusting each cavity
-                    for cav in cavs:
-                        bad_state = True
-                        while bad_state:
-                            try:
-                                StateMonitor.check_state()
-                                # Since we're setting multiple cavities, we will enforce a single common settle time after
-                                # all are set.
-                                cav.set_gradient(gset=old_gsets[cav.name], settle_time=0, force=True)
-                                bad_state = False
-                            except Exception as ex:
-                                logger.error(f"Bad state detected: {ex}")
-                                response = input(f"Try to setup for this sample again? (n|y): ").lower().lstrip()
-                                if not response.startswith('y'):
-                                    logger.info("Exiting sample iteration at user request post-exception.")
-                                    raise ex
+    return cavs, new_gsets, old_gsets, zones_gsets
 
-                except Exception as ex:
-                    logger.error(f"Exception raised: {ex}")
-                    response = input(f"Restore cavities to initial values? (n|y): ").lower().lstrip()
-                    if response.startswith('y'):
-                        logger.info("Attempting to restore PSETs and GSETs")
-                        for cav in cavs:
-                            logger.info(f"Restoring {cav.name}")
-                            cav.restore_pset()
-                            cav.restore_gset(settle_time=1)
-                    response = input(f"Continue with next iteration of scan? (n|y): ").lower().lstrip()
-                    if response.startswith('y'):
-                        pass
-                    else:
-                        raise ex
 
-                logger.info("Scan complete")
-        finally:
-            linac.restore_psets()
+class Status(Enum):
+    """An Enum class for tracking the state of a gradient update."""
+    # Everything worked - collect data
+    SUCCESS = 1
+    # Something went wrong, but we want to try it again
+    RETRY = 2
+    # Something went wrong - skip data, continue procedure
+    FAIL = 3
+    # Something went really wrong - skip data, abort procedure
+    ABORT = 4
+    # We haven't finished the job to find out how it went
+    UNKNOWN = 5
 
-        return
+
+def collect_data_at_gradients(cavs: List[Cavity], new_gsets: Dict[str, float], old_gsets: Dict[str, float],
+                              settle_time: float, avg_time: float, file: TextIO):
+    """This method changes the gradient settings, writes data to the index, and rolls back gradient changes.
+
+    Users are prompted should something go wrong.  UserScanAbort is raised if user requests we abort the entire scan.
+
+    Returns the final status
+    """
+    status = Status.UNKNOWN
+    while status != Status.SUCCESS:
+        logger.info("Attempting cavity updates.")
+        status, failed = update_cavity_gsets_parallel(cavs=cavs, new_gsets=new_gsets, settle=0,
+                                                      force=True)
+        if status != Status.SUCCESS:
+            logger.warning(f"{len(failed)} cavities had problems updating")
+            status = update_gsets_failure_prompt(failed=failed)
+            if status == Status.ABORT:
+                raise UserScanAbort("Aborting after errors updating gradients.")
+            elif status == Status.FAIL:
+                # User requested we skip this update, roll back any changes, and move on with the
+                # procedure
+                break
+            else:
+                # User indicated either success (take data and move on even if there were some problems)
+                # or retry (which means we'll go through this loop again.)
+                pass
+
+    if status == Status.SUCCESS:
+        logger.info(f"Begin settling and data collection period")
+        # Only take data if we declared success on updating gradients
+        settle_and_collect_data(cavs=cavs, file=file, settle_time=settle_time, avg_time=avg_time)
+
+    # Now roll back the changes
+    status = Status.UNKNOWN
+    while status != Status.SUCCESS:
+        logger.info("Attempting cavity gradient rollback.")
+        status, failed = update_cavity_gsets_parallel(cavs=cavs, new_gsets=old_gsets, settle=0,
+                                                      force=True)
+        logger.warning(f"Update status = {status}")
+        if status != Status.SUCCESS:
+            response = input("Try to rollback gradients again (y/n)?  'n' aborts scan.")
+            if response.strip().lower().startswith("n"):
+                raise UserScanAbort("Aborting after error rolling back gradient changes.")
+
+
+def update_cavity_gset(cavity: Cavity, gset: float, settle: float, force: bool) -> bool:
+    """Update a cavity and return true/false based on success/error."""
+
+    success = False
+    try:
+        # Since we're setting multiple cavities, we will enforce a single common settle time after
+        # all are set.
+        cavity.set_gradient(gset=gset, settle_time=0, force=True)
+        success = True
+    except UserScanAbort:
+        raise
+    except Exception as exc:
+        logger.error(f"{cavity.name}: Error setting gradient.  {exc}")
+
+    return success
+
+
+def update_cavity_gsets_parallel(cavs: List[Cavity], new_gsets: Dict[str, float], settle: float,
+                                 force: bool) -> Tuple[Status, List[Cavity]]:
+    """Update cavity gradients in parallel.  Return True if data should be collected."""
+    time.sleep(0.1)
+    status = Status.FAIL
+    failed = [cav for cav in cavs]
+    try:
+        StateMonitor.check_state()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(cavs)) as executor:
+            futures = {}
+            for cav in cavs:
+                logger.debug(f"Submitting {cav.name} for parallel GSET update")
+                future = executor.submit(update_cavity_gset, cav, new_gsets[cav.name], settle, force)
+                futures[future] = cav
+
+            for future in concurrent.futures.as_completed(futures):
+                # update_cavity_gset returns True if successful, false otherwise.
+                cav = futures[future]
+                if not future.result():
+                    logger.error(f"{cav.name}: Error updating gradients.")
+                else:
+                    # Remove the cavity from the list of failures
+                    for idx, cav2 in enumerate(failed):
+                        if cav2.name == cav.name:
+                            del failed[idx]
+
+        if len(failed) > 0:
+            status = Status.FAIL
+        else:
+            status = Status.SUCCESS
+
+    except UserScanAbort:
+        raise
+    except Exception as ex:
+        traceback.print_exc()
+        logger.error(f"Bad state detected or trouble with cavities: {ex}")
+        status = status.FAIL
+        # response = input(f"Try to setup for this sample again? (n|y): ").lower().lstrip()
+        # if not response.startswith('y'):
+        #     logger.info("Exiting sample iteration at user request post-exception.")
+        #     status = Status.FAIL
+        # else:
+        #     logger.info("Retrying this sample .")
+        #     status = update_cavity_gsets_parallel(cavs, new_gsets, settle, force)
+
+    return status, failed
+
+
+def update_gsets_failure_prompt(failed: List[Cavity]):
+    # Exit the executor context manager to close out the thread pool.  Now process the results
+    if len(failed) > 0:
+        print(f"Cavities {','.join([cav.name for cav in failed])} failed to update.  Options:")
+        print(f"(R) Retry cavity updates")
+        print(f"(A) Abort collection procedure.  PSETs restored, no further gradient changes.")
+        print(f"(S) Skip cavity updates and roll gradients back to their original settings.")
+        print(f"(K) Keep current gradients as is.  Helpful if some cavities updated but others fail on retry.")
+
+        response = None
+        invalid = True
+        while invalid:
+            response = input("Selection [R, A, S, K]: ").upper().strip()[0]
+            if response in 'RASK':
+                invalid = False
+            else:
+                print(f"Invalid response '{response}'")
+
+        if response is None or type(response) != str or len(response) == 0:
+            logger.info(f"Received unknown response '{response}'.  Using 'R' / retry as default")
+            response = 'R'
+
+        if response.startswith('R'):
+            status = Status.RETRY
+            # # Recurse back into this function and try again.  Return the eventual status of follow on
+            # # attempts.
+            # status = update_cavity_gsets_parallel(cavs, new_gsets, settle, force)
+        elif response.startswith('S'):
+            status = Status.FAIL
+            # Call this function again to put the gradients back to their original settings.  Return FAIL.
+            # update_cavity_gsets_parallel(cavs, orig_gsets, settle, force)
+            # status = Status.FAIL
+        elif response.startswith('A'):
+            # The user requested we stop the procedure all together and make no more changes than to restore
+            # PSETs
+            status = Status.ABORT
+        elif response.startswith('K'):
+            # Something went wrong, but the user thinks something updated successfully.  We'll call it success.
+            status = Status.SUCCESS
+    else:
+        # We didn't have any failures
+        status = Status.SUCCESS
+
+    return status
+
+
+def settle_and_collect_data(cavs: List[Cavity], file: TextIO, settle_time: float, avg_time: float) -> None:
+    """Wait the requested times for cryo to settle and explicit data collection.  Then write data to disk.
+
+    Note: This assumes you have already opened a non-binary file for text writing.
+    """
+    # Do the common settle time now or simply check that we have a good state to begin collecting data
+    if settle_time > 0:
+        logger.info(f"Waiting {settle_time} seconds for cryo to settle.")
+        settle_start = datetime.now()
+        StateMonitor.monitor(duration=settle_time)
+        settle_end = datetime.now()
+    else:
+        StateMonitor.check_state()
+        settle_start = datetime.now()
+        settle_end = settle_start
+
+    # Do the data collection (averaging) time now
+    logger.info(f"Waiting {avg_time} seconds for MYA to collect data.")
+    avg_start = settle_end
+    StateMonitor.monitor(duration=avg_time)
+    avg_end = datetime.now()
+
+    logger.info("Writing to data log")
+    cav_names = [cav.name for cav in cavs]
+    cav_epics_names = [cav.epics_name for cav in cavs]
+    write_data_index_row(file, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
+                         avg_end=avg_end, settle_time=settle_time, avg_time=avg_time,
+                         cavity_name=cav_names, cavity_epics_name=cav_epics_names)
+    file.flush()
