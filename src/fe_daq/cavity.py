@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 class Cavity:
     @classmethod
-    def get_cavity(cls, name: str, epics_name: str, cavity_type: str, length: float,
+    def get_cavity(cls, name: str, epics_name: str, cavity_type: str, length: float, tuner_bad: bool,
                    bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
                    gset_max: float = None):
         if zone.controls_type == '1.0':
@@ -24,7 +24,7 @@ class Cavity:
             tuner_recovery_margin = config.get_parameter('LLRF1_tuner_recovery_margin')
             tuner_timeout = config.get_parameter('LLRF1_tuner_timeout')
             cavity = LLRF1Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                                 bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
+                                 bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, tuner_bad=tuner_bad,
                                  gset_fe_onset=gset_fe_onset, gset_max=gset_max, gmes_step_size=gmes_step_size,
                                  gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin,
                                  tuner_timeout=tuner_timeout)
@@ -34,7 +34,7 @@ class Cavity:
             tuner_recovery_margin = config.get_parameter('LLRF2_tuner_recovery_margin')
             tuner_timeout = config.get_parameter('LLRF2_tuner_timeout')
             cavity = LLRF2Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                                 bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
+                                 bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, tuner_bad=tuner_bad,
                                  gset_fe_onset=gset_fe_onset, gset_max=gset_max, gmes_step_size=gmes_step_size,
                                  gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin,
                                  tuner_timeout=tuner_timeout)
@@ -44,7 +44,7 @@ class Cavity:
             tuner_recovery_margin = config.get_parameter('LLRF3_tuner_recovery_margin')
             tuner_timeout = config.get_parameter('LLRF3_tuner_timeout')
             cavity = LLRF3Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                                 bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
+                                 bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, tuner_bad=tuner_bad,
                                  gset_fe_onset=gset_fe_onset, gset_max=gset_max, gmes_step_size=gmes_step_size,
                                  gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin,
                                  tuner_timeout=tuner_timeout)
@@ -56,10 +56,10 @@ class Cavity:
 
     # Importing Zone would result in circular imports
     # noinspection PyUnresolvedReferences
-    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
-                 bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
-                 gset_max: float = None, gset_min: float = None, gmes_step_size: float = 0.1,
-                 gmes_sleep_interval: float = 1, tuner_recovery_margin: float = 1.0, tuner_timeout: float = 300):
+    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float, tuner_timeout: float,
+                 tuner_bad: bool, bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None,
+                 gset_fe_onset: float = None, gset_max: float = None, gset_min: float = None,
+                 gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1, tuner_recovery_margin: float = 1.0):
         self.name = name
         self.epics_name = epics_name
         self.zone_name = zone.name
@@ -67,6 +67,7 @@ class Cavity:
         self.controls_type = zone.controls_type  # These should be '1.0', '2.0', etc. LLRF controls.
         self.length = length
         self.bypassed = bypassed
+        self.tuner_bad = tuner_bad
         self.zone = zone
         self.Q0 = Q0
         self.cavity_number = int(name[5:6])
@@ -251,6 +252,10 @@ class Cavity:
             gset: The requested gset
             force: Are we allowed to exceed single step limits.
         """
+        if self.tuner_bad:
+            msg = f"{self.name}: Can't change a cavity with a bad tuner."
+            logger.error(msg)
+            raise RuntimeError(msg)
         if gset != 0 and self.bypassed_eff:
             msg = f"{self.name}: Can't turn on bypassed cavity"
             logger.error(msg)
@@ -477,13 +482,13 @@ class Cavity:
 
 
 class LLRF1Cavity(Cavity):
-    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
+    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float, tuner_bad: bool,
                  bypassed: bool, zone: 'Zone', Q0: float, tuner_recovery_margin: float,
                  gset_no_fe: float = None, gset_fe_onset: float = None, gset_max: float = None,
-                 gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
-        super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
-                         bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
-                         gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
+                 gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0, tuner_timeout: float = 300):
+        super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length, tuner_bad=tuner_bad,
+                         tuner_timeout=tuner_timeout, bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
+                         gset_fe_onset=gset_fe_onset, gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
                          gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
 
         self.rf_on = epics.PV(f"{self.epics_name}ACK1.B6", connection_callback=connection_cb)
@@ -496,6 +501,19 @@ class LLRF1Cavity(Cavity):
         # P1 from IOC
         self.fsd2 = epics.PV(f"{self.epics_name}STAT.B4", connection_callback=connection_cb)
         self.fsd2.add_callback(get_threshold_cb(low=0, high=0))  # == 1 implies fault
+
+        # TODO: Check if tuner is bad, if tuner is OK watch tuner mode.  Also if tuner is bad, don't make GSET or PSET
+        # changes
+        # 1 is auto, 0 is manual
+        self.tuner_mode = epics.PV(f"{self.epics_name}TMODI", connection_callback=connection_cb)
+        self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
+
+        # # What is the max steps to take at a time before checking it's effect.  100 is normal mode, 1000 is turbo
+        # self.tuner_turbo = epics.PV(f"{self.epics_name}THDRV.C", connection_callback=connection_cb)
+        # # If == 50,000 for more than one second, set TSEL.A to 3 to reset
+        # self.tuner_step_count = epics.PV(f"{self.epics_name}TSELI", connection_callback=connection_cb)
+        # # Set to 3 to trigger a step
+        # self.tuner_step_reset = epics.PV(f"{self.epics_name}TSEL.A", connection_callback=connection_cb)
 
         tdeta_n_suffix = ".N"
         if config.get_parameter('testing'):
@@ -571,11 +589,12 @@ class LLRF1Cavity(Cavity):
 
 class LLRF2Cavity(Cavity):
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,  tuner_recovery_margin: float,
-                 bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
-                 gset_max: float = None, gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
-        super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
+                 tuner_bad: bool, bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None,
+                 gset_fe_onset: float = None, gset_max: float = None, gmes_step_size: float = 0.1,
+                 gmes_sleep_interval: float = 1.0, tuner_timeout: float = 300):
+        super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length, tuner_bad=tuner_bad,
                          bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
-                         gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
+                         gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size, tuner_timeout=tuner_timeout,
                          gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
 
         # Define constants for this type of cavity
@@ -688,12 +707,14 @@ class LLRF2Cavity(Cavity):
 
 class LLRF3Cavity(Cavity):
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float, tuner_recovery_margin: float,
-                 bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
-                 gset_max: float = None, gmes_step_size: float = 0.1, gmes_sleep_interval: float = 1.0):
-        super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
+                 tuner_bad: bool, bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None,
+                 gset_fe_onset: float = None, gset_max: float = None, gmes_step_size: float = 0.1,
+                 gmes_sleep_interval: float = 1.0, tuner_timeout: float = 300):
+        super().__init__(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length, tuner_bad=tuner_bad,
                          bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe, gset_fe_onset=gset_fe_onset,
-                         gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size,
+                         gset_max=gset_max, gset_min=3.0, gmes_step_size=gmes_step_size, tuner_timeout=tuner_timeout,
                          gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
+
         # Define constants for this type of cavity
         self.gset_min = 5
 
@@ -786,5 +807,3 @@ class LLRF3Cavity(Cavity):
         # self.wait_for_tuning()
         self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
                                   ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
-        # self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp, ramp_timeout=ramp_timeout,
-        #                    gradient_epsilon=gradient_epsilon)

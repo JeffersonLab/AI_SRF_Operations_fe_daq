@@ -398,7 +398,7 @@ class LinacFactory:
         """Creates cavities from CED data and adds to linac and zone.  Expects _setup_zones to have been run."""
         logging.info("Setting up cavities from CED")
         ced_params = 't=CryoCavity&p=EPICSName&p=CavityType&p=MaxGSET&p=OpsGsetMax&p=Bypassed&p=Length&p=Housed_by' \
-                     '&p=Q0&out=json'
+                     '&p=Q0&p=TunerBad&out=json'
         ced_url = f"http://{self.ced_server}/inventory?ced={self.ced_instance}&workspace={self.ced_workspace}" \
                   f"&{ced_params}"
         cavity_elements = self._get_ced_elements(ced_url=ced_url)
@@ -512,6 +512,7 @@ class LinacFactory:
             zone = p['Housed_by']
             length = float(p['Length'])
             bypassed = True if 'Bypassed' in p.keys() else False
+            tuner_bad = True if 'TunerBad' in p.keys() else False
 
             # Pull a new GSET limit from config file.
             gset_max = config.get_parameter(['gset_max', p['EPICSName']])
@@ -536,7 +537,7 @@ class LinacFactory:
             if zone in linac.zones.keys():
                 cavity = Cavity.get_cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
                                            bypassed=bypassed, Q0=Q0, zone=linac.zones[zone], gset_no_fe=gset_no_fe,
-                                           gset_fe_onset=gset_fe_onset, gset_max=gset_max)
+                                           gset_fe_onset=gset_fe_onset, gset_max=gset_max, tuner_bad=tuner_bad)
                 linac.add_cavity(cavity)
 
         # Here we check that all cavity PVs are able to connect and run any initialization that happens after

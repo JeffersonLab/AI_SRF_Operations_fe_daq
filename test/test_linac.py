@@ -168,7 +168,7 @@ class TestLinac(TestCase):
     def test_add_cavity(self):
         linac, zone = get_linac_zone('NorthLinac', '1L11', '1.0')
         cavity = Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                        Q0=6e9)
+                        Q0=6e9, tuner_timeout=10, tuner_bad=False)
 
         # Test that the cavity is missing
         self.assertFalse(cavity.name in linac.cavities.keys())
@@ -224,7 +224,7 @@ class TestZone(TestCase):
     def test_add_cavity(self):
         linac, zone = get_linac_zone("NorthLinac", '1L11', '1.0')
         cavity = Cavity.get_cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True,
-                                   zone=zone, Q0=6e9)
+                                   zone=zone, Q0=6e9, tuner_bad=False)
 
         # Test that the cavity is missing
         self.assertFalse(cavity.name in linac.cavities.keys())
@@ -239,28 +239,28 @@ class TestZone(TestCase):
         linac, zone = get_linac_zone('NorthLinac', '1L11', '1.0')
         zone.add_cavity(
             Cavity(name="1L11-1", epics_name="adamc:R1B1", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                   Q0=6e9))
+                   Q0=6e9, tuner_timeout=10, tuner_bad=False))
         zone.add_cavity(
             Cavity(name="1L11-2", epics_name="adamc:R1B2", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                   Q0=6e9))
+                   Q0=6e9, tuner_timeout=10, tuner_bad=False))
         zone.add_cavity(
             Cavity(name="1L11-3", epics_name="adamc:R1B3", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                   Q0=6e9))
+                   Q0=6e9, tuner_timeout=10, tuner_bad=False))
         zone.add_cavity(
             Cavity(name="1L11-4", epics_name="adamc:R1B4", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                   Q0=6e9))
+                   Q0=6e9, tuner_timeout=10, tuner_bad=False))
         zone.add_cavity(
             Cavity(name="1L11-5", epics_name="adamc:R1B5", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                   Q0=6e9))
+                   Q0=6e9, tuner_timeout=10, tuner_bad=False))
         zone.add_cavity(
             Cavity(name="1L11-6", epics_name="adamc:R1B6", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                   Q0=6e9))
+                   Q0=6e9, tuner_timeout=10, tuner_bad=False))
         zone.add_cavity(
             Cavity(name="1L11-7", epics_name="adamc:R1B7", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                   Q0=6e9))
+                   Q0=6e9, tuner_timeout=10, tuner_bad=False))
         zone.add_cavity(
             Cavity(name="1L11-8", epics_name="adamc:R1B8", cavity_type='C25', length=0.5, bypassed=True, zone=zone,
-                   Q0=6e9))
+                   Q0=6e9, tuner_timeout=10, tuner_bad=False))
 
         # This should be a 100% heat loss
         zone.check_percent_heat_change(gradients=[0, 0, 0, 0, 0, 0, 0, 0], percentage=101)

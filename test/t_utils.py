@@ -25,7 +25,7 @@ def get_linac_zone_cavity(controls_type='2.0', style_2='old'):
         zone = Zone(name="1L22", prefix=PREFIX, linac=linac, controls_type='2.0', jt_max=jt_max,
                     jt_recovery_margin=jt_recovery_margin, jt_suffix="")
         cav = LLRF2Cavity(name="1L22-1", epics_name=f"{PREFIX}R1M1", cavity_type="C100", length=0.7, bypassed=False,
-                          zone=zone, Q0=6e9, tuner_recovery_margin=tuner_recovery_margin)
+                          zone=zone, Q0=6e9, tuner_recovery_margin=tuner_recovery_margin, tuner_bad=False)
         if style_2 == 'old':
             cav.fcc_firmware_version = 2018.0
     elif controls_type == '3.0':
@@ -36,7 +36,7 @@ def get_linac_zone_cavity(controls_type='2.0', style_2='old'):
         zone = Zone(name="1L10", prefix=PREFIX, linac=linac, controls_type='3.0', jt_max=jt_max,
                     jt_recovery_margin=jt_recovery_margin, jt_suffix="")
         cav = LLRF3Cavity(name="1L10-1", epics_name=f"{PREFIX}R1A1", cavity_type="C75", length=0.4916, bypassed=False,
-                          zone=zone, Q0=6.3e9, tuner_recovery_margin=tuner_recovery_margin)
+                          zone=zone, Q0=6.3e9, tuner_recovery_margin=tuner_recovery_margin, tuner_bad=False)
     else:
         raise RuntimeError("Unsupported controls_type")
 

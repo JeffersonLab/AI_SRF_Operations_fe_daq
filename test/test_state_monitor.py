@@ -61,7 +61,7 @@ class TestStateMonitor(TestCase):
         pvs = [cav.rf_on.pvname]
         for i in range(2, 9):
             cav2 = Cavity.get_cavity(name='1L22-2', epics_name='adamc:R1M2', cavity_type='C100', length=0.7,
-                                     bypassed=False, zone=zone, Q0=6e9)
+                                     bypassed=False, zone=zone, Q0=6e9, tuner_bad=False)
             pvs.append(cav2.rf_on.pvname)
         n = 1000
         n_sleeps = [n, ] * len(pvs)
