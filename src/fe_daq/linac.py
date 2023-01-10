@@ -116,19 +116,25 @@ class Linac:
         self.zones[cavity.zone.name].add_cavity(cavity)
 
     def jiggle_psets(self, delta: float):
-        """Jiggle PSET values for all cavities in the linac about their starting point."""
+        """Jiggle PSET values for all cavities in the linac about their starting point. Skip cavities with problems."""
 
         pvlist = []
         values = []
         for cavity in self.cavities.values():
-            pvlist.append(cavity.pset.pvname)
-            values.append(cavity.get_jiggled_pset_value(delta=delta))
+            if not cavity.bypassed and not cavity.tuner_bad:
+                pvlist.append(cavity.pset.pvname)
+                values.append(cavity.get_jiggled_pset_value(delta=delta))
 
         logger.info(f"Jiggling PSETs for {pvlist}")
         epics.caput_many(pvlist, values, wait=True)
         logger.info("PSETs jiggled")
 
     def restore_psets(self):
+        """Put all of the PSETs back.  Even the ones on cavities with broken tuners, etc.
+
+        The only reason the PSET would change on a cavity with a bad tuner is if we made a mistake and changed it during
+        this applicaiton.  It's better to put it back than to leave it in a bad place and hope that an operator sees
+        a warning message."""
         for cavity in self.cavities.values():
             cavity.restore_pset()
 
