@@ -783,7 +783,7 @@ class LLRF3Cavity(Cavity):
         is_ramping = int(self.stat1.value) & 0x8000 > 0
         return is_ramping
 
-    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=True, ramp_timeout=20,
+    def set_gradient(self, gset: float, settle_time: float = 6.0, wait_for_ramp=False, ramp_timeout=20,
                      force: bool = False, gradient_epsilon: float = 0.05, interactive: bool = True):
         """Set a cavity's gradient and wait for supporting systems to compensate for the change.
 
@@ -794,7 +794,7 @@ class LLRF3Cavity(Cavity):
         Args:
             gset: The new value to set GSET to
             settle_time: How long we need to wait for cryo system to adjust to change in heat load
-            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C100s ramp for larger steps.
+            wait_for_ramp: Do we need to wait for the cavity gradient to ramp up?  C75s don't ramp at this time.
             ramp_timeout: How long to wait for ramping to finish once started?  This prompts a user on timeout.
             force: Are we going to force a big gradient move?  The 1 MV/m step is a very cautious limit.
             gradient_epsilon: The minimum difference between GSET and GMES that we consider as "noise".
@@ -805,5 +805,5 @@ class LLRF3Cavity(Cavity):
         logger.info(f"{self.name}:  Setting gradient from {self.gset.value} to {gset}.")
         self._validate_requested_gradient(gset=gset, force=force)
         # self.wait_for_tuning()
-        self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
+        self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
                                   ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
