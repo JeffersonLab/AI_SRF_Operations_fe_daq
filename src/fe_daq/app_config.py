@@ -60,6 +60,10 @@ def parse_config_file(filename: str = f"{app_root}/fe_daq.cfg"):
 
         try:
             _CONFIG = json.loads(jsondata)
+        except json.decoder.JSONDecodeError as exc:
+            start, stop = max(0, exc.pos - 50), min(len(exc.doc), exc.pos + 50)
+            logger.error(f"Error parsing config: ... {exc.doc[start:stop]} ...")
+            raise exc
         except Exception as exc:
             logger.error(f"Error parsing _CONFIG file '{filename}': {exc}")
             raise exc
