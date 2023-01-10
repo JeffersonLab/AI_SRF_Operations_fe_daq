@@ -22,26 +22,32 @@ class Cavity:
             gmes_step_size = config.get_parameter('LLRF1_gmes_step_size')
             gmes_sleep_interval = config.get_parameter('LLRF1_gmes_sleep_interval')
             tuner_recovery_margin = config.get_parameter('LLRF1_tuner_recovery_margin')
+            tuner_timeout = config.get_parameter('LLRF1_tuner_timeout')
             cavity = LLRF1Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
                                  bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
                                  gset_fe_onset=gset_fe_onset, gset_max=gset_max, gmes_step_size=gmes_step_size,
-                                 gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
+                                 gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin,
+                                 tuner_timeout=tuner_timeout)
         elif zone.controls_type == '2.0':
             gmes_step_size = config.get_parameter('LLRF2_gmes_step_size')
             gmes_sleep_interval = config.get_parameter('LLRF2_gmes_sleep_interval')
             tuner_recovery_margin = config.get_parameter('LLRF2_tuner_recovery_margin')
+            tuner_timeout = config.get_parameter('LLRF2_tuner_timeout')
             cavity = LLRF2Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
                                  bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
                                  gset_fe_onset=gset_fe_onset, gset_max=gset_max, gmes_step_size=gmes_step_size,
-                                 gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
+                                 gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin,
+                                 tuner_timeout=tuner_timeout)
         elif zone.controls_type == '3.0':
             gmes_step_size = config.get_parameter('LLRF3_gmes_step_size')
             gmes_sleep_interval = config.get_parameter('LLRF3_gmes_sleep_interval')
             tuner_recovery_margin = config.get_parameter('LLRF3_tuner_recovery_margin')
+            tuner_timeout = config.get_parameter('LLRF3_tuner_timeout')
             cavity = LLRF3Cavity(name=name, epics_name=epics_name, cavity_type=cavity_type, length=length,
                                  bypassed=bypassed, zone=zone, Q0=Q0, gset_no_fe=gset_no_fe,
                                  gset_fe_onset=gset_fe_onset, gset_max=gset_max, gmes_step_size=gmes_step_size,
-                                 gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin)
+                                 gmes_sleep_interval=gmes_sleep_interval, tuner_recovery_margin=tuner_recovery_margin,
+                                 tuner_timeout=tuner_timeout)
         else:
             raise ValueError(f"Unsupported controls_type '{zone.controls_type}")
 
@@ -53,7 +59,7 @@ class Cavity:
     def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,
                  bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None, gset_fe_onset: float = None,
                  gset_max: float = None, gset_min: float = None, gmes_step_size: float = 0.1,
-                 gmes_sleep_interval: float = 1, tuner_recovery_margin: float = 1.0):
+                 gmes_sleep_interval: float = 1, tuner_recovery_margin: float = 1.0, tuner_timeout: float = 300):
         self.name = name
         self.epics_name = epics_name
         self.zone_name = zone.name
@@ -65,6 +71,7 @@ class Cavity:
         self.Q0 = Q0
         self.cavity_number = int(name[5:6])
         self.tuner_recovery_margin = tuner_recovery_margin
+        self.tuner_timeout = tuner_timeout
 
         # This is a higher gradient where we have found no field emission.  Typically it is the highest integer MV/m
         # that does not produce a radiation signal. Useful as a baseline "high" gradient with some wiggle room from FE.
@@ -146,8 +153,11 @@ class Cavity:
     def is_tuning_required(self, margin: Optional[float] = None):
         raise NotImplementedError("Must be implemented by child classes")
 
-    def wait_for_tuning(self, tune_timeout: float = 60, interactive: bool = True):
+    def wait_for_tuning(self, tune_timeout: Optional[float] = None, interactive: bool = True):
         """Method that waits for a cavity to be brought back within tune limits.  No Waiting if no tuning required."""
+        if tune_timeout is None:
+            tune_timeout = self.tuner_timeout
+
         if self.is_tuning_required(margin=0):
             start_ramp = datetime.now()
             logger.info(f"{self.name}: Waiting for tuner (timeout = {tune_timeout})")
@@ -379,7 +389,7 @@ class Cavity:
                                f"={heater_margin}.")
                 raise RuntimeError("Timed out waiting for heater margin")
 
-    def _do_gradient_ramping(self, gset: float, settle_time: float, tune_timeout: float = 60, **kwargs):
+    def _do_gradient_ramping(self, gset: float, settle_time: float, tune_timeout: Optional[float] = None, **kwargs):
         """Slow ramp gradient to a new values.  Not all cavities allow time for tuners on a gset caput.
 
         This is designed so that it pauses whenever the cavity requires tuning, not when the cavity is tuning.  The
@@ -414,7 +424,7 @@ class Cavity:
         self._do_ramp_checks(tune_timeout=tune_timeout)
         self._set_gradient(gset=gset, settle_time=settle_time, **kwargs)
 
-    def _do_ramp_checks(self, tune_timeout: float):
+    def _do_ramp_checks(self, tune_timeout: Optional[float] = None):
         self.wait_for_tuning(tune_timeout=tune_timeout)
         self._wait_for_jt(timeout=60)
         self._wait_for_linac_pressure(timeout=60)
@@ -699,6 +709,7 @@ class LLRF3Cavity(Cavity):
         self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
         self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
         self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
+        # self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
         self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
 
         # Detune in hertz
@@ -741,7 +752,6 @@ class LLRF3Cavity(Cavity):
         if margin is None:
             margin = self.tuner_recovery_margin
 
-        logger.error(f"{self.name}: is tuning required {self.cfqe.value}, {self.detahzhi.value}")
         if math.fabs(self.cfqe.value) > (self.detahzhi.value - margin):
             return True
         return False
