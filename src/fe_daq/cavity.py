@@ -527,6 +527,8 @@ class LLRF1Cavity(Cavity):
         self.pv_list.append(self.rf_on)
         self.pv_list.append(self.tdeta)
         self.pv_list.append(self.tdeta_n)
+        self.pv_list.append(self.tuner_mode)
+        # self.pv_list.append(self.tuner_step_count)
 
 
     def is_rf_on(self):
