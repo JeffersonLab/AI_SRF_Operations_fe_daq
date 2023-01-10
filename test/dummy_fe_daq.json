@@ -47,6 +47,8 @@
     "LLRF1_gmes_sleep_interval": 0.25,
     # How far should the tuner "recover" before we start back up
     "LLRF1_tuner_recovery_margin": 1.0,
+    # How long should we wait for tuner before we raise exception or prompt for user input (in seconds).  Default 300s.
+    "LLRF1_tuner_timeout": 120.0,
 
     ################ LLRF 2.0 ###############
     # How big of a step size should be taken by cavity when ramping gradient
@@ -55,6 +57,8 @@
     "LLRF2_gmes_sleep_interval": 0.25,
     # How far should the tuner "recover" before we start back up
     "LLRF2_tuner_recovery_margin": 1.0,
+    # How long should we wait for tuner before we raise exception or prompt for user input (in seconds).  Default 300s.
+    "LLRF2_tuner_timeout": 120.0,
 
     ################ LLRF 3.0 ###############
     # How big of a step size should be taken by cavity when ramping gradient
@@ -62,7 +66,9 @@
     # How long to sleep between steps (excludes tuner time)
     "LLRF3_gmes_sleep_interval": 0.25,
     # How far should the tuner "recover" before we start back up
-    "LLRF3_tuner_recovery_margin": 1.0
+    "LLRF3_tuner_recovery_margin": 1.0,
+    # How long should we wait for tuner before we raise exception or prompt for user input (in seconds).  Default 300s.
+    "LLRF3_tuner_timeout": 120.0
 
     # Max gradients for application.  These can exceed R...ODVH, but not R...GSET.DRVH
 #    "gset_max": {
