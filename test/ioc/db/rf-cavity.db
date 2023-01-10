@@ -63,6 +63,21 @@ record(ai, "adamc:R$(A)DETAHZHI") {
     field(PINI, "YES")
 }
 
+# Create LLRF1.0 the tuner mode record (auto / manual)
+# auto:   TMODI == 1
+# manual: TMODI == 0
+record(ao, "adamc:R$(A)TMODI") {
+    field(VAL, 1)
+    field(PINI, "YES")
+}
+
+# Create the LLRF2.0/3.0 tuner mode record
+# auto: .B7 == 1
+# manual: .B7 == 0
+record(mbbiDirect, "adamc:R$(A)TCMDbits") {
+    field(VAL, 128)
+    field(PINI, "YES")
+}
 
 # New LLRF 2.0 "Was FSD raised?" PV
 # 12 GeV style controls
