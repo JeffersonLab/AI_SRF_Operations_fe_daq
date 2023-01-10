@@ -212,6 +212,7 @@ class TestCavity(TestCase):
         step = get_gradient_step_size(cav)
 
         # Test that we do wait for ramping to be done
+        print("Please enter 'y' at the prompt.")
         cav.stat1.put(2048)
         t1 = Thread(target=stop_ramping, args=(cav.stat1.pvname, ramp_time))
         t1.start()
