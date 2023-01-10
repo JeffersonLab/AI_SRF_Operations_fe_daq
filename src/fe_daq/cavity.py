@@ -684,14 +684,6 @@ class LLRF2Cavity(Cavity):
         # necessary at the cost of not exceeding cryo, etc. limits.
         self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
                                   ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
-        # if self.fcc_firmware_version > 2019:
-        #     # Newer firmware versions do not ramp the gradient and will trip if you move more than ~0.2 MV/m in a step
-        #     self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
-        #                               ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
-        # else:
-        #     # Older firmware versions will ramp the gradient and handle tuning as they go
-        #     self._set_gradient(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
-        #                        ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon)
 
 
 class LLRF3Cavity(Cavity):
