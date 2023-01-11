@@ -91,6 +91,8 @@ class TestCavity(TestCase):
             self.assertEqual(pre_walk_gset, post_walk_gset,
                              "walk_gradient tried to change GSET with request higher than ODVH")
 
+            # Set the sleep interval very small so we don't have to wait long for this test.
+            cav.gmes_sleep_interval = 0.01
             cav.gset.put(cav.gset_min + 3, wait=True)
             time.sleep(0.01)
             start = cav.gset_min + 3
