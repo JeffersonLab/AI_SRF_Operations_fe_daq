@@ -300,16 +300,16 @@ class Cavity:
                     break
                 # Add a sleep/monitor and check if we've reached our target gradient.  If we're this close and the
                 # cavity is not ramping, then it's very unlikely  to ramp.  This difference is the usual noise in GMES.
-                StateMonitor.monitor(0.05)
                 if math.fabs(gset - self.gmes.value) < gradient_epsilon:
                     break
+                time.sleep(0.05)
 
             if ramp_started:
                 # Here we have to wait for the gradient to finish ramping, assuming it actually started
                 # logger.info(f"{self.name}: waiting for gradient to ramp")
                 start_ramp = datetime.now()
                 while self.is_gradient_ramping():
-                    StateMonitor.monitor(0.1)
+                    time.sleep(0.1)
                     if (datetime.now() - start_ramp).total_seconds() > ramp_timeout:
                         logger.warning(f"{self.name}: gradient ramp timed out.")
                         if interactive:
