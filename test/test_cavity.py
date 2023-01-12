@@ -111,6 +111,18 @@ class TestCavity(TestCase):
         finally:
             cav.gset.put(pre_walk_gset)
 
+    def test_set_gradient_bad_tuner(self):
+        linac, zone, cav = get_linac_zone_cavity()
+        cav.tuner_bad = False
+        val = cav.gset.value
+        cav.set_gradient(val + 0.01, settle_time=0, wait_for_ramp=False)
+        cav.set_gradient(val - 0.01, settle_time=0, wait_for_ramp=False)
+
+        cav.tuner_bad = True
+        with self.assertRaises(Exception) as context:
+            cav.set_gradient(cav.gset_min + 0.01, settle_time=0, wait_for_ramp=False)
+
+
     def test_set_gradient(self):
         linac, zone, cav = get_linac_zone_cavity()
         with self.assertRaises(Exception) as context:
@@ -186,7 +198,7 @@ class TestCavity(TestCase):
                         f"Cavity did not wait for tuning ({(end - start).total_seconds()} s < {tuning_time} s)")
 
     def test_set_gradient_ramping(self):
-        """This tests if we are watching the ramping properly for old LLRF2.0 cavities."""
+        # This tests if we are watching the ramping properly for old LLRF2.0 cavities.
         linac, zone, cav = get_linac_zone_cavity()
 
         ramp_time = 0.25
