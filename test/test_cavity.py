@@ -186,6 +186,7 @@ class TestCavity(TestCase):
                         f"Cavity did not wait for tuning ({(end - start).total_seconds()} s < {tuning_time} s)")
 
     def test_set_gradient_ramping(self):
+        """This tests if we are watching the ramping properly for old LLRF2.0 cavities."""
         linac, zone, cav = get_linac_zone_cavity()
 
         ramp_time = 0.25
@@ -198,12 +199,18 @@ class TestCavity(TestCase):
         cav.stat1.put(2048)
         t1 = Thread(target=stop_ramping, args=(cav.stat1.pvname, ramp_time))
         start = datetime.now()
+
+        # Manually set it so we don't have any extra waits and the whole thing happens in one step.
+        cav.gmes_sleep_interval = 0
+        cav.gmes_step_size = 0.1
         t1.start()
         cav.set_gradient(gset + step, settle_time=0)
         end = datetime.now()
         t1.join()
-        waited = abs(ramp_time - (end - start).total_seconds())
-        self.assertTrue(waited < 0.1, msg=f"We didn't wait for ramping properly.  Exp={ramp_time}, Result={waited}")
+        waited = (end - start).total_seconds()
+        delta = abs(ramp_time - waited)
+        # There is a polling cycle when checking to see if a cavity is done ramping.  Should be around 10 Hz.
+        self.assertTrue(delta < 0.1, msg=f"We didn't wait for ramping properly.  Exp={ramp_time}, Result={waited}")
 
     def test_set_gradient_ramping_interactive(self):
         # This test requires user input since the ramp_time will exceed 10s
