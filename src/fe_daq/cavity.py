@@ -502,11 +502,11 @@ class LLRF1Cavity(Cavity):
         self.fsd2 = epics.PV(f"{self.epics_name}STAT.B4", connection_callback=connection_cb)
         self.fsd2.add_callback(get_threshold_cb(low=0, high=0))  # == 1 implies fault
 
-        # TODO: Check if tuner is bad, if tuner is OK watch tuner mode.  Also if tuner is bad, don't make GSET or PSET
-        # changes
+        # We want tuners to be in auto mode.  Tuners might not be used if bypassed or known tuner problem
         # 1 is auto, 0 is manual
         self.tuner_mode = epics.PV(f"{self.epics_name}TMODI", connection_callback=connection_cb)
-        self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
+        if not self.tuner_bad or self.bypassed:
+            self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
 
         # # What is the max steps to take at a time before checking it's effect.  100 is normal mode, 1000 is turbo
         # self.tuner_turbo = epics.PV(f"{self.epics_name}THDRV.C", connection_callback=connection_cb)
@@ -528,7 +528,6 @@ class LLRF1Cavity(Cavity):
         self.pv_list.append(self.tdeta)
         self.pv_list.append(self.tdeta_n)
         self.pv_list.append(self.tuner_mode)
-        # self.pv_list.append(self.tuner_step_count)
 
 
     def is_rf_on(self):
@@ -631,9 +630,15 @@ class LLRF2Cavity(Cavity):
                 # If not 972, then we have an FSD being pulled.
                 self.fsd.add_callback(get_threshold_cb(low=972, high=972))
 
+        # We want tuners to be in auto mode.  Tuners might not be used if bypassed or known tuner problem
+        # 1 is auto, 0 is manual
+        self.tuner_mode = epics.PV(f"{self.epics_name}TCMDbits.B7", connection_callback=connection_cb)
+        if not self.tuner_bad or self.bypassed:
+            self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
+
         # List of all PVs related to a cavity.
         self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd, self.fccver, self.cfqe,
-                                       self.detahzhi]
+                                       self.detahzhi, self.tuner_mode]
 
         # Cavity can be effectively bypassed in a number of ways.  Work through that here.
         self.bypassed_eff = bypassed
@@ -742,8 +747,15 @@ class LLRF3Cavity(Cavity):
         # Monitor the FSD in the global state monitor
         self.fsd.add_callback(get_threshold_cb(low=768, high=768))
 
+        # We want tuners to be in auto mode.  Tuners might not be used if bypassed or known tuner problem
+        # 1 is auto, 0 is manual
+        self.tuner_mode = epics.PV(f"{self.epics_name}TCMDbits.B7", connection_callback=connection_cb)
+        if not self.tuner_bad or self.bypassed:
+            self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
+
         # List of all PVs related to a cavity.
-        self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd, self.cfqe, self.detahzhi]
+        self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd, self.cfqe, self.detahzhi,
+                                       self.tuner_mode]
         self.pv_list = [pv for pv in self.pv_list if pv is not None]
 
         # Cavity can be effectively bypassed in a number of ways.  Work through that here.
