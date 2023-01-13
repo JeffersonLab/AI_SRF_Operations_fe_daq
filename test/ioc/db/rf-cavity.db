@@ -100,3 +100,9 @@ record(mbbiDirect, "adamc:R$(A)ACK1") {
     field(VAL, 64)
     field(PINI, "YES")
 }
+
+# LLRF 3.0 fault bitword (klystron) - bit 1, 1 == good
+record(ao, "adamc:R$(A)KFLT") {
+    field(VAL, 1)
+    field(PINI, "YES")
+}
