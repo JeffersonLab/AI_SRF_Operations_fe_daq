@@ -10,7 +10,7 @@ import numpy as np
 from fe_daq import app_config as config
 from fe_daq.cavity import Cavity
 from fe_daq.detector import NDXElectrometer
-from fe_daq.state_monitor import StateMonitor
+from fe_daq.state_monitor import StateMonitor, get_threshold_cb
 from test.t_utils import get_linac_zone_cavity
 
 logger = logging.getLogger()
@@ -220,4 +220,28 @@ class TestStateMonitor(TestCase):
         finally:
             linac.heater_margin.put(old_value, wait=True)
         time.sleep(0.01)
+        StateMonitor.check_state(user_input=False)
+
+    def test_cb_threshold_bitshift_mask(self):
+        reinit_all()
+        linac, zone, cav = get_linac_zone_cavity(controls_type='3.0')
+        cav.fsd1.put(0)
+        old_value = cav.fsd1.value
+
+        # Make sure the state is good before we alert on a bad state
+        StateMonitor.check_state(user_input=False)
+
+        # Add the callback with the threshold, bitshift and mask
+        cav.fsd1.add_callback(get_threshold_cb(low=0, high=0, bitshift=9, mask=1))
+
+        # 512 = 0000 0010 0000 0000
+        cav.fsd1.put(512, wait=True)
+        time.sleep(0.05)
+
+        try:
+            with self.assertRaises(Exception) as context:
+                StateMonitor.check_state(user_input=False)
+        finally:
+            cav.fsd1.put(old_value, wait=True)
+        time.sleep(0.2)
         StateMonitor.check_state(user_input=False)

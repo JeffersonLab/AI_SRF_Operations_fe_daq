@@ -47,7 +47,8 @@ def get_hv_read_back_cb(target_hv: float, threshold: float = 0.15):
     return _hv_read_back_cb
 
 
-def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) -> callable:
+def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None, bitshift: Optional[int] = None,
+                     mask: Optional[int] = None) -> callable:
     """A generic callback generator for monitoring PVs that need to stay within a certain threshold."""
 
     # Simple string instead of an enum - values can be high, low, ok
@@ -64,6 +65,13 @@ def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None) 
         nonlocal low, high, prev
         is_low = False
         is_high = False
+
+        # Transform the value if bitshift or masking was requested
+        if bitshift is not None:
+            value = int(value) >> bitshift
+        if mask is not None:
+            value = int(value) & mask
+
         if low is not None:
             if value < low:
                 is_low = True
