@@ -729,8 +729,13 @@ class LLRF3Cavity(Cavity):
         self.rf_on = epics.PV(f"{self.epics_name}RFONr", connection_callback=connection_cb)
         self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
         self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
+
+        # FBRIO should catch everything, but it's broken on some zones.  Need to check to child PVs for now.
         # self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
-        self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
+        # XCIEN is a zone PV.  Bits 8 to 15 are for each cavity.  bit 8 == cavity 1, 1 == fault, 0 == OK
+        self.fsd1 = epics.PV(f"{self.epics_name[:-1]}XCIEN", connection_callback=connection_cb)
+        # KFLT is a cavity PV.  B0 is what we need to check.  1 == OK, 0 == fault
+        self.fsd2 = epics.PV(f"{self.epics_name}KFLT", connection_callback=connection_cb)
 
         # Detune in hertz
         self.cfqe = epics.PV(f"{self.epics_name}CFQE", connection_callback=connection_cb)
@@ -745,7 +750,8 @@ class LLRF3Cavity(Cavity):
             self.rf_on.add_callback(rf_on_cb)
 
         # Monitor the FSD in the global state monitor
-        self.fsd.add_callback(get_threshold_cb(low=768, high=768))
+        self.fsd2.add_callback(get_threshold_cb(low=0, high=0, bitshift=8, mask=2**(self.cavity_number - 1)))
+        self.fsd2.add_callback(get_threshold_cb(low=1, high=1), mask=1)
 
         # We want tuners to be in auto mode.  Tuners might not be used if bypassed or known tuner problem
         # 1 is auto, 0 is manual
@@ -754,8 +760,8 @@ class LLRF3Cavity(Cavity):
             self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
 
         # List of all PVs related to a cavity.
-        self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd, self.cfqe, self.detahzhi,
-                                       self.tuner_mode]
+        self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd1, self.fsd2, self.cfqe,
+                                       self.detahzhi, self.tuner_mode]
         self.pv_list = [pv for pv in self.pv_list if pv is not None]
 
         # Cavity can be effectively bypassed in a number of ways.  Work through that here.
