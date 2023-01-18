@@ -178,10 +178,10 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 ######  Oct 6, 2022  ######
 ###########################
 
-I had Jacob Blackshaw run the following commands.  There were some issues with 1L22 according to him, but I don't understand what they mean exactly.
-Jacob said that 1L22 kept tripping off on FCC Interlock Faults, but it didn't seem to slow down the daq software.  I need to check what those faults
-mean and make sure I understand what faults I should me monitoring for in general.  I think I only watch for RF on/off.  He also suggested increasing
-the time out on waiting for a cavity to tune from 10s to 15s as many cavities would finish tuning right after the timeout happened.
+# I had Jacob Blackshaw run the following commands.  There were some issues with 1L22 according to him, but I don't understand what they mean exactly.
+# Jacob said that 1L22 kept tripping off on FCC Interlock Faults, but it didn't seem to slow down the daq software.  I need to check what those faults
+# mean and make sure I understand what faults I should me monitoring for in general.  I think I only watch for RF on/off.  He also suggested increasing
+# the time out on waiting for a cavity to tune from 10s to 15s as many cavities would finish tuning right after the timeout happened.
 
 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L22 1L23 1L24 1L25 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 9
 > bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L22 1L23 1L24 1L25 --settle-time 0 --average-time 3 --num-samples 50 --num-cavities 6 --gradient-offsets -1.5 -1.25 -1.0 -0.75 -0.5
