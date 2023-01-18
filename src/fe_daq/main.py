@@ -119,7 +119,8 @@ def main() -> int:
         linac_name = args.linac
         testing = args.testing
 
-        config_file = config.app_root + "/fe_daq.cfg"
+        #config_file = config.app_root + "/fe_daq.cfg"
+        config_file = config.csue_config_dir + "/fe_daq.cfg"
         if os.path.isfile(config_file):
             config.parse_config_file(config_file)
         config.set_parameter('testing', testing)
@@ -128,7 +129,8 @@ def main() -> int:
         dir_name = f"run-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}"
         if testing:
             dir_name = f"run-testing-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}"
-        log_dir = os.path.join(config.app_root, "log", dir_name)
+        #log_dir = os.path.join(config.app_root, "log", dir_name)
+        log_dir = os.path.join(config.csue_log_dir, dir_name)
         init_logging(log_dir=log_dir, run_log="fe_daq.log")
 
 

@@ -9,8 +9,18 @@ import operator
 
 logger = logging.getLogger(__name__)
 
+
 # The root directory of the app
 app_root = os.path.realpath(os.path.join(os.path.basename(__file__), ".."))
+
+# CSUE variables
+hbase = os.environ['HBASE']
+csue_app_letter = 'f'
+csue_app_name = 'fe_daq'
+csue_app_version = 'dvl'
+csue_app_path = f"{hbase}/apps/{csue_app_letter}/{csue_app_name}/{csue_app_version}"
+csue_log_dir = f"{csue_app_path}/fileio/log"
+csue_config_dir = f"{csue_app_path}/fileio/config"
 
 # The configuration dictionary for the application
 _CONFIG = {}
