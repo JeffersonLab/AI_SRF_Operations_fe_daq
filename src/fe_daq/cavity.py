@@ -278,13 +278,11 @@ class Cavity:
 
     def _set_gradient(self, gset: float, settle_time: float, wait_for_ramp: bool, ramp_timeout: float,
                       gradient_epsilon: float, interactive: bool = True) -> None:
-        """Internal call to set a cavities gradient.
+        """Internal call to set a cavity's gradient.
 
         If interactive, user will be prompted on gradient ramping timeouts.  Otherwise it raises an exception.
         """
-        # Instead of trying to watch tuner status, etc., we just set the gradient, then sleep some requested amount of
-        # time.  This will need to be approached differently if used in a more general purpose application.
-        # C100's will ramp gradient for you, but we need to wait for it.
+        # This method only sets the gradient and waits from any ramping to occur if requested.  
         self.gset.put(gset)
         if wait_for_ramp:
             # Here we wait to see if the cavity will start to ramp.  Since this updates on a 1 Hz cycle, I might have to
