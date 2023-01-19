@@ -252,6 +252,11 @@ class Cavity:
             gset: The requested gset
             force: Are we allowed to exceed single step limits.
         """
+        if self.zone.linac.autoheat_mode.value != 1:
+            msg = (f"{self.name}: Can't change gradients when autoheat is disabled"
+                  f" ({self.zone.linac.autoheat_mode.pvname} == {self.zone.linac.autoheat_mode.value})")
+            logger.error(msg)
+            raise RuntimeError(msg)
         if self.tuner_bad:
             msg = f"{self.name}: Can't change a cavity with a bad tuner."
             logger.error(msg)

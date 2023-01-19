@@ -36,9 +36,11 @@ class Linac:
         if name == "NorthLinac":
             self.linac_pressure = epics.PV(f"{prefix}CPI4107B", connection_callback=connection_cb)
             self.heater_margin = epics.PV(f"{prefix}CAPHTRMGN", connection_callback=connection_cb)
+            self.autoheat_mode = epics.PV(f"{prefix}CAPBON", connection_callback=connection_cb)
         elif name == "SouthLinac":
             self.linac_pressure = epics.PV(f"{prefix}CPI5107B", connection_callback=connection_cb)
             self.heater_margin = epics.PV(f"{prefix}CAPHTR2MGN", connection_callback=connection_cb)
+            self.autoheat_mode = epics.PV(f"{prefix}CAP2BON", connection_callback=connection_cb)
         else:
             raise ValueError(f"Unsupported linac name '{name}'")
 
@@ -46,8 +48,11 @@ class Linac:
         # operations.  Nominal linac pressure is 0.0385.  Probably want marginal heater capacity at least > 2.
         self.linac_pressure.add_callback(get_threshold_cb(low=self.linac_pressure_min, high=self.linac_pressure_max))
         self.heater_margin.add_callback(get_threshold_cb(low=self.heater_margin_min))
+        # We want to make sure that the autoheaters stay on.  Otherwise when we change gradients, the heaters won't
+        # compensate.  1 == on.
+        self.autoheat_mode.add_callback(get_threshold_cb(low=1, high=1))
 
-        self.pv_list = [self.linac_pressure, self.heater_margin]
+        self.pv_list = [self.linac_pressure, self.heater_margin, self.autoheat_mode]
 
     def wait_for_connections(self, timeout: float = 2.0):
         """Wait for all of the PVs associated with this Linac to connect.  Raise exception if that doesn't happen."""

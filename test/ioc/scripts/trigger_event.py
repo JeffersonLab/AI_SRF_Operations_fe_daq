@@ -12,6 +12,27 @@ logging.basicConfig(level=logging.DEBUG)
 PREFIX = "adamc:"
 
 
+def disable_autoheat(name: str, duration: float, **kwargs):
+    if name == '1L':
+        pv = PV(f"{PREFIX}CAPBON")
+    elif name == '2L':
+        pv = PV(f"{PREFIX}CAP2BON")
+    else:
+        raise ValueError(f"Invalid name '{name}'")
+
+    recover = 1
+    pv.put(0, wait=True)
+
+    if duration is None:
+        input(f"Press any key to recover linac pressure to {recover}")
+    else:
+        print(f"Sleeping {duration} seconds before recovering {name} to {recover} pressure")
+        sleep(duration)
+
+    pv.put(recover, wait=True)
+
+
+
 def pressure_event(name: str, level: str, duration: float, recover: float, **kwargs):
     if name == '1L':
         pv = PV(f"{PREFIX}CPI4107B")
@@ -162,6 +183,7 @@ def main():
     rf_fault = subparsers.add_parser('rf_fault', help='Trigger an RF fault')
     tuner = subparsers.add_parser('tuner', help='Trigger an cavity requires tuning event')
     jt = subparsers.add_parser('jt', help='Trigger a high JT valve event')
+    autoheat = subparsers.add_parser('autoheat', help='Temporarily disabled autoheat on a linac')
 
     pressure.add_argument('-n', '--name', help='linac name', required=True, type=str, choices=['1L', '2L'])
     pressure.add_argument('-l', '--level', help='High or low pressure', required=True, type=str,
@@ -196,6 +218,9 @@ def main():
     jt.add_argument('-r', '--recover', help='What value to set JT position to after duration seconds',
                     default=80, type=float)
 
+    autoheat.add_argument('-n', '--name', help='linac name', required=True, type=str, choices=['1L', '2L'])
+    autoheat.add_argument('-d', '--duration', help='How long in seconds until recovery', type=optional_float, default=10)
+
     args = parser.parse_args()
 
     if args.command == "pressure":
@@ -208,6 +233,8 @@ def main():
         tuner_event(**vars(args))
     elif args.command == "jt":
         jt_event(**vars(args))
+    elif args.command == "autoheat":
+        disable_autoheat(**vars(args))
 
 
 if __name__ == "__main__":
