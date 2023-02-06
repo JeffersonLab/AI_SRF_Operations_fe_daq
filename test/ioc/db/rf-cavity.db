@@ -79,6 +79,14 @@ record(mbbiDirect, "adamc:R$(A)TCMDbits") {
     field(PINI, "YES")
 }
 
+# LLRF 3.0 / new 2.0 klystron fault
+# Any of B0 .. B8 == 0 means no fault.  == 1 mean fault
+record(mbbiDirect, "adamc:R$(A)KFLTT") {
+    field(VAL, 0)
+    field(PINI, "YES")
+}
+
+
 # New LLRF 2.0 "Was FSD raised?" PV
 # 12 GeV style controls
 record(ao, "adamc:R$(A)FBRIO") {

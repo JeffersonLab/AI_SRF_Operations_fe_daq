@@ -3,8 +3,8 @@
 #! DBD("includes.dbd")
 #! DBDEND
 
-# LLRF 3.0 zone-wise fault bitword
-record(ao, "adamc:R$(A)XCIEN") {
+# LLRF new 2.0 / 3.0 zone level FCC interlock fault
+record(mbbiDirect, "adamc:R$(A)XIFLTCIEN") {
     field(VAL, 0)
     field(PINI, "YES")
 }
