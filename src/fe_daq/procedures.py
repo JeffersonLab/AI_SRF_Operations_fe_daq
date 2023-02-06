@@ -790,8 +790,8 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                     gsets_up.append(gradient)
 
                 # Figure out the values to scan going down.
+                gsets_down = []
                 for i in range(1, max_cavity_steps + 1):
-                    gsets_down = []
                     gradient = gset_curr - (step_size * i)
                     if gradient <= gset_min:
                         logger.info(f"{cavity.name}: Limited to -{gset_curr - gset_min} MV/m below initial.")
