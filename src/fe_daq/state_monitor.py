@@ -62,7 +62,7 @@ def get_threshold_cb(low: Optional[float] = None, high: Optional[float] = None, 
 
     def threshold_cb(pvname: str, value: float, **kwargs) -> None:
         # Note low, high are nonlocal, but do not get modified
-        nonlocal low, high, prev
+        nonlocal low, high, prev, bitshift, mask
         is_low = False
         is_high = False
 
