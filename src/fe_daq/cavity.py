@@ -254,7 +254,7 @@ class Cavity:
         """
         if self.zone.linac.autoheat_mode.value != 1:
             msg = (f"{self.name}: Can't change gradients when autoheat is disabled"
-                  f" ({self.zone.linac.autoheat_mode.pvname} == {self.zone.linac.autoheat_mode.value})")
+                   f" ({self.zone.linac.autoheat_mode.pvname} == {self.zone.linac.autoheat_mode.value})")
             logger.error(msg)
             raise RuntimeError(msg)
         if self.tuner_bad:
@@ -532,7 +532,6 @@ class LLRF1Cavity(Cavity):
         self.pv_list.append(self.tdeta_n)
         self.pv_list.append(self.tuner_mode)
 
-
     def is_rf_on(self):
         """A simple method to determine if RF is on in a cavity"""
         return self.rf_on.value == 1
@@ -592,7 +591,7 @@ class LLRF1Cavity(Cavity):
 
 
 class LLRF2Cavity(Cavity):
-    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float,  tuner_recovery_margin: float,
+    def __init__(self, name: str, epics_name: str, cavity_type: str, length: float, tuner_recovery_margin: float,
                  tuner_bad: bool, bypassed: bool, zone: 'Zone', Q0: float, gset_no_fe: float = None,
                  gset_fe_onset: float = None, gset_max: float = None, gmes_step_size: float = 0.1,
                  gmes_sleep_interval: float = 1.0, tuner_timeout: float = 300):
@@ -733,12 +732,33 @@ class LLRF3Cavity(Cavity):
         self.stat1 = epics.PV(f"{self.epics_name}STAT1", connection_callback=connection_cb)
         self.deta = epics.PV(f"{self.epics_name}DETA", connection_callback=connection_cb)
 
-        # FBRIO should catch everything, but it's broken on some zones.  Need to check to child PVs for now.
+        # FBRIO should catch everything, but it's broken on some zones.  Need to check to lower-level PVs for now.
+        # Rama had suggested R..XCIEN and R...KFLT in it's place.  Scott said the public version of those are XIFLTCIEN
+        # and KFLTT.
         # self.fsd = epics.PV(f"{self.epics_name}FBRIO", connection_callback=connection_cb)
-        # XCIEN is a zone PV.  Bits 8 to 15 are for each cavity.  bit 8 == cavity 1, 1 == fault, 0 == OK
-        self.fsd1 = epics.PV(f"{self.epics_name[:-1]}XCIEN", connection_callback=connection_cb)
-        # KFLT is a cavity PV.  B0 is what we need to check.  1 == OK, 0 == fault
-        self.fsd2 = epics.PV(f"{self.epics_name}KFLT", connection_callback=connection_cb)
+
+        # R..XIFLTCIEN.Bx as a per cavity MBBI => Cavity 1 == B0, Cavity 2 == B1, ....  Fault = 1, ok = 0
+        self.fsd0 = epics.PV(f"{self.epics_name[:-1]}XIFLTCIEN.B{self.cavity_number - 1}",
+                             connection_callback=connection_cb, callback=get_threshold_cb(low=0, high=0))
+
+        # self.fsd1 = epics.PV(f"{self.epics_name[:-1]}XCIEN", connection_callback=connection_cb)
+        # R...KFLTT.Bx is a per cavity PV.  Klystron related faults at B0 - B7, Fault = 1, ok = 0
+        self.fsd1 = epics.PV(f"{self.epics_name}KFLTT.B0", connection_callback=connection_cb,
+                             callback=get_threshold_cb(low=0, high=0))
+        self.fsd2 = epics.PV(f"{self.epics_name}KFLTT.B1", connection_callback=connection_cb,
+                             callback=get_threshold_cb(low=0, high=0))
+        self.fsd3 = epics.PV(f"{self.epics_name}KFLTT.B2", connection_callback=connection_cb,
+                             callback=get_threshold_cb(low=0, high=0))
+        self.fsd4 = epics.PV(f"{self.epics_name}KFLTT.B3", connection_callback=connection_cb,
+                             callback=get_threshold_cb(low=0, high=0))
+        self.fsd5 = epics.PV(f"{self.epics_name}KFLTT.B4", connection_callback=connection_cb,
+                             callback=get_threshold_cb(low=0, high=0))
+        self.fsd6 = epics.PV(f"{self.epics_name}KFLTT.B5", connection_callback=connection_cb,
+                             callback=get_threshold_cb(low=0, high=0))
+        self.fsd7 = epics.PV(f"{self.epics_name}KFLTT.B6", connection_callback=connection_cb,
+                             callback=get_threshold_cb(low=0, high=0))
+        self.fsd8 = epics.PV(f"{self.epics_name}KFLTT.B7", connection_callback=connection_cb,
+                             callback=get_threshold_cb(low=0, high=0))
 
         # Detune in hertz
         self.cfqe = epics.PV(f"{self.epics_name}CFQE", connection_callback=connection_cb)
@@ -752,10 +772,6 @@ class LLRF3Cavity(Cavity):
         if not self.bypassed:
             self.rf_on.add_callback(rf_on_cb)
 
-        # Monitor the FSD in the global state monitor
-        self.fsd2.add_callback(get_threshold_cb(low=0, high=0, bitshift=8, mask=2**(self.cavity_number - 1)))
-        self.fsd2.add_callback(get_threshold_cb(low=1, high=1), mask=1)
-
         # We want tuners to be in auto mode.  Tuners might not be used if bypassed or known tuner problem
         # 1 is auto, 0 is manual
         self.tuner_mode = epics.PV(f"{self.epics_name}TCMDbits.B7", connection_callback=connection_cb)
@@ -763,8 +779,9 @@ class LLRF3Cavity(Cavity):
             self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
 
         # List of all PVs related to a cavity.
-        self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd1, self.fsd2, self.cfqe,
-                                       self.detahzhi, self.tuner_mode]
+        self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.cfqe, self.detahzhi, self.tuner_mode,
+                                       self.fsd0, self.fsd1, self.fsd2, self.fsd3, self.fsd4, self.fsd5, self.fsd6,
+                                       self.fsd7, self.fsd8]
         self.pv_list = [pv for pv in self.pv_list if pv is not None]
 
         # Cavity can be effectively bypassed in a number of ways.  Work through that here.
