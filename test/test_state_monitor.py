@@ -224,24 +224,20 @@ class TestStateMonitor(TestCase):
 
     def test_cb_threshold_bitshift_mask(self):
         reinit_all()
-        linac, zone, cav = get_linac_zone_cavity(controls_type='3.0')
-        cav.fsd1.put(0)
-        old_value = cav.fsd1.value
+        cb = get_threshold_cb(low=0, high=0, bitshift=2, mask=1)
+
+        # Should be no alert
+        cb(pvname='test_pv', value=0)
 
         # Make sure the state is good before we alert on a bad state
         StateMonitor.check_state(user_input=False)
 
-        # Add the callback with the threshold, bitshift and mask
-        cav.fsd1.add_callback(get_threshold_cb(low=0, high=0, bitshift=9, mask=1))
+        # Should alert
+        # 0d15 = 0b1111, 0b1111 >> 2 = 0b11, 0b11 AND 0b01 = 0b01, 0b01 == 0d1 => ALERT
+        cb(pvname='test_pv', value=15)
+        with self.assertRaises(Exception) as context:
+            StateMonitor.check_state(user_input=False)
 
-        # 512 = 0000 0010 0000 0000
-        cav.fsd1.put(512, wait=True)
-        time.sleep(0.05)
-
-        try:
-            with self.assertRaises(Exception) as context:
-                StateMonitor.check_state(user_input=False)
-        finally:
-            cav.fsd1.put(old_value, wait=True)
-        time.sleep(0.2)
+        # Should be no alert
+        cb(pvname='test_pv', value=0)
         StateMonitor.check_state(user_input=False)
