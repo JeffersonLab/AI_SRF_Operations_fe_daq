@@ -194,3 +194,13 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 
 # I worked with Kyle and Rama to test out all of the new changes to the DAQ software.  Lots of runs from 2023-01-06 on the NL.  I didn't
 # capture the commands here since they were all testing parts of the software based on problems we saw in real time.
+
+
+###########################
+######  Jan 20, 2023  #####
+###########################
+
+# I ran the simple scan, but it took much longer to finish than usual.  I ran out of time to do the random sample scan.  I think I am waiting on the tuners
+# when I don't really need to
+
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L22 1L23 1L24 1L25 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 9
