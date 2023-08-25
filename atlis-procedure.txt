@@ -204,3 +204,33 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 # when I don't really need to
 
 > bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L22 1L23 1L24 1L25 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 9
+
+
+###########################
+######  Aug 25, 2023  #####
+###########################
+
+# I'm doing software tests today on as many cavity types as I can get access to.  First one is 1L23.  I had lots of trouble
+# with the NDX system.  Sue and Joe Sawyer are looking into what's going on.  I disabled the NDX monitoring and pushed ahead.
+
+# C100 test (apparently F100 - found out after the fact)
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L23 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L23 --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 4 --gradient-offsets -1.0 -0.5 -0.25
+
+# C75 test
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L05 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L05 --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 4 --gradient-offsets -1.0 -0.5 -0.25
+
+# C25 test
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L16 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L16 --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 4 --gradient-offsets -1.0 -0.5 -0.25
+
+# C50 test
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --linac-zones 1L04 --settle-time 0 --average-time 3 --step-size 0.5 --num-steps 3
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L04 --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 4 --gradient-offsets -1.0 -0.5 -0.25
+
+# P1R test
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L07 --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 4 --gradient-offsets -1.0 -0.5 -0.25
+
+# Regular C100 test
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L22 --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 4 --gradient-offsets -1.0 -0.5 -0.25
