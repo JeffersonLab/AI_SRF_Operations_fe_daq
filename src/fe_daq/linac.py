@@ -452,7 +452,7 @@ class LinacFactory:
         logging.info("Setting up NDX detectors from CED")
 
         # Grab the NDX Electrometers for the linac.  Then get the detectors that are associated with those.
-        em_params = f"t=NDX_Electrometer&out=json&p=SegMask&p=Detectors"
+        em_params = f"t=NDX_Electrometer&out=json&p=SegMask&p=Detectors&p=I400"
         ced_url = f"http://{self.ced_server}/inventory?ced={self.ced_instance}&workspace={self.ced_workspace}" \
                   f"&{em_params}"
 
@@ -468,12 +468,13 @@ class LinacFactory:
             if electrometer_names is None or name in electrometer_names:
                 logger.info(f"Adding {name} to {linac.name}'s electrometers")
 
-                target_hv = config.get_parameter(['ndx_hv', name])
+                target_hv = config.get_parameter(['ndx_target_high_voltage', name])
                 #
                 # if 'ndx_hv' in config.get_parameter(f'ndx_hv.{name}') and name in Config.config['ndx_hv']:
                 #     target_hv = Config.config['ndx_hv'][name]
 
-                ndxe = NDXElectrometer(name=name, epics_name=f"{self.pv_prefix}{name}", target_hv=target_hv)
+                ndxe = NDXElectrometer(name=name, epics_name=f"{self.pv_prefix}{name}", target_hv=target_hv,
+                                       I400=p['I400'])
                 linac.ndx_electrometers[name] = ndxe
                 for d in p['Detectors'].values():
                     if len(d) > 0:

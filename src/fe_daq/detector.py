@@ -11,9 +11,14 @@ logger = logging.getLogger(__name__)
 
 class NDXElectrometer:
 
-    def __init__(self, name: str, epics_name: str, target_hv: Optional[float] = None):
+    def __init__(self, name: str, epics_name: str, I400: int, target_hv: Optional[float] = None):
         self.name = name
         self.epics_name = epics_name
+
+        # I400 is a CED property of the same name.  Some electrometers have and fiber connected controller and some do
+        # not.  The ones with the fiber connection have a non-zero port number (probably, referring to which port is
+        # connected to the controller).  The new ones have a zero there.  These devices have different PV interfaces.
+        self.I400 = int(I400)
         if target_hv is None:
             self.target_hv = 1000
         else:
@@ -22,15 +27,20 @@ class NDXElectrometer:
         self.capacitor_switch = epics.PV(f"{self.epics_name}_CAPACITOR_SW", connection_callback=connection_cb)
         self.daq_enabled = epics.PV(f"{self.epics_name}_RESET", connection_callback=connection_cb)
         self.integration_period = epics.PV(f"{self.epics_name}_PERIOD", connection_callback=connection_cb)
-        self.hv_set_point = epics.PV(f"{self.epics_name}_HV_BIAS", connection_callback=connection_cb)
-        self.hv_read_back = epics.PV(f"{self.epics_name}_HV_RBCK", connection_callback=connection_cb)
+        if self.I400 == 0:
+            self.hv_read_back = epics.PV(f"{self.epics_name}_r_i400_0_HV", connection_callback=connection_cb)
+            self.hv_set_point = epics.PV(f"{self.epics_name}_c_i400_0_HV", connection_callback=connection_cb)
+        else:
+            self.hv_read_back = epics.PV(f"{self.epics_name}_HV_RBCK", connection_callback=connection_cb)
+            self.hv_set_point = epics.PV(f"{self.epics_name}_HV_BIAS", connection_callback=connection_cb)
+
         self.hv_read_back.add_callback(get_hv_read_back_cb(self.target_hv, 0.15))
 
         # Do this check once at the start.  The rest of the time we monitor the read back in the StateMonitor to make
         # sure the actual value is close.
         if self.hv_set_point.get(use_monitor=False) != self.target_hv:
             raise RuntimeError(
-                f"{self.name} HV set point {self.hv_set_point.pvname} = {self.hv_set_point.value} (!= {target_hv})")
+                f"{self.name} HV set point {self.hv_set_point.pvname} = {self.hv_set_point.value} (!= {self.target_hv})")
 
         self.pv_list = [self.capacitor_switch, self.daq_enabled, self.integration_period, self.hv_set_point,
                         self.hv_read_back]
