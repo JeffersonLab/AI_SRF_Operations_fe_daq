@@ -5,6 +5,8 @@ from datetime import datetime
 from typing import Union, Tuple, Optional
 import numpy as np
 
+from fe_daq import utils
+
 logger = logging.getLogger(__name__)
 
 # An array for tracking if a PV has ever connected
@@ -346,10 +348,15 @@ __threshold_exceeded: {ascii(cls.__threshold_exceeded)}"""
                 msg = f"StateMonitor found error.\n{ex}"
                 logger.error(msg)
                 if user_input:
-                    response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
-                    if not response.startswith('y'):
+                    do_continue = utils.user_alert_scan_paused(msg)
+                    if not do_continue:
                         logger.info("Exiting after error based on user response.")
                         raise RuntimeError("User indicated unrecoverable error.")
+
+                    # response = input(f"{msg}\nContinue (n|Y): ").lower().lstrip()
+                    # if not response.startswith('y'):
+                    #     logger.info("Exiting after error based on user response.")
+                    #     raise RuntimeError("User indicated unrecoverable error.")
                 else:
                     logger.info("No user interaction requested on check_state exception.")
                     raise ex

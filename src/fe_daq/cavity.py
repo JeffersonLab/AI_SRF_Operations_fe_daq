@@ -1,7 +1,9 @@
+import concurrent
 import math
 import time
+import traceback
 from datetime import datetime
-from typing import Optional
+from typing import Optional, TextIO, List, Dict, Tuple
 
 import epics
 import logging
@@ -9,6 +11,8 @@ import numpy as np
 
 from fe_daq.state_monitor import connection_cb, rf_on_cb, StateMonitor, get_threshold_cb
 from fe_daq import app_config as config
+from fe_daq.utils import Status, write_data_index_row, user_alert_scan_paused, user_alert_update_gsets_fail
+from fe_daq.exceptions import UserScanAbort
 
 logger = logging.getLogger(__name__)
 
@@ -361,22 +365,26 @@ class Cavity:
 
         Raises RuntimeError upon timeout.
         """
-        lp_recovery_point = self.zone.linac.linac_pressure_max - self.zone.linac.lp_recovery_margin
+        lp_recovery_max = self.zone.linac.linac_pressure_max - self.zone.linac.lp_recovery_margin
+        lp_recovery_min = self.zone.linac.linac_pressure_min + self.zone.linac.lp_recovery_margin
         wait_for_linac_pressure, linac_pressure = self.zone.linac.check_linac_pressure()
         if wait_for_linac_pressure:
-            logger.warning(f"{self.name}: Found linac pressure too high. {self.zone.linac.linac_pressure.pvname}="
-                           f"{linac_pressure}.  Waiting max {timeout} seconds to recover to"
-                           f" {lp_recovery_point}.")
+            logger.warning(f"{self.name}: Found linac pressure out of spec. {self.zone.linac.linac_pressure.pvname}="
+                           f"{linac_pressure}.  Waiting max {timeout} seconds to recover to within"
+                           f" [{lp_recovery_min}, {lp_recovery_max}].")
         start = datetime.now()
         while wait_for_linac_pressure:
             time.sleep(0.01)
-            wait_for_linac_pressure, linac_pressure = self.zone.linac.check_linac_pressure(threshold=lp_recovery_point)
+            wait_for_linac_pressure, linac_pressure = self.zone.linac.check_linac_pressure(max_val=lp_recovery_max,
+                                                                                           min_val=lp_recovery_min)
             if not wait_for_linac_pressure:
                 logger.info(f"{self.name}: Linac pressure recovered to {linac_pressure}")
             elif (datetime.now() - start).total_seconds() > timeout:
                 logger.warning(f"{self.name}: JT valve unrecovered. {self.zone.linac.linac_pressure.pvname}"
                                f"={linac_pressure}.")
                 raise RuntimeError("Timed out waiting for JT Valve")
+            else:
+                logger.info("Waiting for linac pressure to recover")
 
     def _wait_for_heater_margins(self, timeout: float):
         """Check if we have enough heater margin.  If not, wait for it to recover.  Raise on timeout."""
@@ -861,3 +869,189 @@ class LLRF3Cavity(Cavity):
         # self.wait_for_tuning()
         self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
                                   ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
+
+
+def collect_data_at_gradients(cavs: List[Cavity], new_gsets: Dict[str, float], old_gsets: Dict[str, float],
+                              settle_time: float, avg_time: float, file: TextIO):
+    """This method changes the gradient settings, writes data to the index, and rolls back gradient changes.
+
+    Users are prompted should something go wrong.  UserScanAbort is raised if user requests we abort the entire scan.
+
+    Returns the final status
+    """
+    status = Status.UNKNOWN
+    while status != Status.SUCCESS:
+        logger.info("Attempting cavity updates.")
+        status, failed = update_cavity_gsets_parallel(cavs=cavs, new_gsets=new_gsets, settle=0,
+                                                      force=True)
+        if status != Status.SUCCESS:
+            logger.warning(f"{len(failed)} cavities had problems updating")
+            status = update_gsets_failure_prompt(failed=failed)
+            if status == Status.ABORT:
+                raise UserScanAbort("Aborting after errors updating gradients.")
+            elif status == Status.FAIL:
+                # User requested we skip this update, roll back any changes, and move on with the
+                # procedure
+                break
+            else:
+                # User indicated either success (take data and move on even if there were some problems)
+                # or retry (which means we'll go through this loop again.)
+                pass
+
+    if status == Status.SUCCESS:
+        logger.info(f"Begin settling and data collection period")
+        # Only take data if we declared success on updating gradients
+        settle_and_collect_data(cavs=cavs, file=file, settle_time=settle_time, avg_time=avg_time)
+
+    # Now roll back the changes
+    status = Status.UNKNOWN
+    while status != Status.SUCCESS:
+        logger.info("Attempting cavity gradient rollback.")
+        status, failed = update_cavity_gsets_parallel(cavs=cavs, new_gsets=old_gsets, settle=0,
+                                                      force=True)
+        logger.warning(f"Update status = {status}")
+        if status != Status.SUCCESS:
+            retry = user_alert_scan_paused("Rollback Failed.  Try again?")
+            if not retry:
+                raise UserScanAbort("Aborting after error rolling back gradient changes.")
+
+            # response = input("Try to rollback gradients again (y/n)?  'n' aborts scan.")
+            # if response.strip().lower().startswith("n"):
+            #     raise UserScanAbort("Aborting after error rolling back gradient changes.")
+
+
+def update_cavity_gset(cavity: Cavity, gset: float, settle: float, force: bool, interactive: bool) -> bool:
+    """Update a cavity and return true/false based on success/error."""
+
+    success = False
+    try:
+        # Since we're setting multiple cavities, we will enforce a single common settle time after
+        # all are set.
+        cavity.set_gradient(gset=gset, settle_time=settle, force=force, interactive=interactive)
+        success = True
+    except UserScanAbort:
+        raise
+    except Exception as exc:
+        logger.error(f"{cavity.name}: Error setting gradient.  {exc}")
+
+    return success
+
+
+def update_cavity_gsets_parallel(cavs: List[Cavity], new_gsets: Dict[str, float], settle: float,
+                                 force: bool) -> Tuple[Status, List[Cavity]]:
+    """Update cavity gradients in parallel.  Return True if data should be collected."""
+    time.sleep(0.1)
+    status = Status.FAIL
+    failed = [cav for cav in cavs]
+    interactive = False
+    try:
+        StateMonitor.check_state()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=len(cavs)) as executor:
+            futures = {}
+            for cav in cavs:
+                logger.debug(f"Submitting {cav.name} for parallel GSET update")
+                future = executor.submit(update_cavity_gset, cav, new_gsets[cav.name], settle, force, interactive)
+                futures[future] = cav
+
+            for future in concurrent.futures.as_completed(futures):
+                # update_cavity_gset returns True if successful, false otherwise.
+                cav = futures[future]
+                if not future.result():
+                    logger.error(f"{cav.name}: Error updating gradients.")
+                else:
+                    # Remove the cavity from the list of failures
+                    for idx, cav2 in enumerate(failed):
+                        if cav2.name == cav.name:
+                            del failed[idx]
+
+        if len(failed) > 0:
+            status = Status.FAIL
+        else:
+            status = Status.SUCCESS
+
+    except UserScanAbort:
+        raise
+    except Exception as ex:
+        traceback.print_exc()
+        logger.error(f"Bad state detected or trouble with cavities: {ex}")
+        status = status.FAIL
+
+    return status, failed
+
+
+def update_gsets_failure_prompt(failed: List[Cavity]):
+    # Exit the executor context manager to close out the thread pool.  Now process the results
+    if len(failed) > 0:
+        user_alert_update_gsets_fail(failed=failed)
+        # print(f"Cavities {','.join([cav.name for cav in failed])} failed to update.  Options:")
+        # print(f"(R) Retry cavity updates")
+        # print(f"(A) Abort collection procedure.  PSETs restored, no further gradient changes.")
+        # print(f"(S) Skip cavity updates and roll gradients back to their original settings.")
+        # print(f"(K) Keep current gradients as is.  Helpful if some cavities updated but others fail on retry.")
+        #
+        # response = None
+        # invalid = True
+        # while invalid:
+        #     response = input("Selection [R, A, S, K]: ").upper().strip()[0]
+        #     if response in 'RASK':
+        #         invalid = False
+        #     else:
+        #         print(f"Invalid response '{response}'")
+        #
+        # if response is None or type(response) != str or len(response) == 0:
+        #     logger.info(f"Received unknown response '{response}'.  Using 'R' / retry as default")
+        #     response = 'R'
+        #
+        # if response.startswith('R'):
+        #     status = Status.RETRY
+        #     # # Recurse back into this function and try again.  Return the eventual status of follow on
+        #     # # attempts.
+        #     # status = update_cavity_gsets_parallel(cavs, new_gsets, settle, force)
+        # elif response.startswith('S'):
+        #     status = Status.FAIL
+        #     # Call this function again to put the gradients back to their original settings.  Return FAIL.
+        #     # update_cavity_gsets_parallel(cavs, orig_gsets, settle, force)
+        #     # status = Status.FAIL
+        # elif response.startswith('A'):
+        #     # The user requested we stop the procedure all together and make no more changes than to restore
+        #     # PSETs
+        #     status = Status.ABORT
+        # elif response.startswith('K'):
+        #     # Something went wrong, but the user thinks something updated successfully.  We'll call it success.
+        #     status = Status.SUCCESS
+    else:
+        # We didn't have any failures
+        status = Status.SUCCESS
+
+    return status
+
+
+def settle_and_collect_data(cavs: List[Cavity], file: TextIO, settle_time: float, avg_time: float) -> None:
+    """Wait the requested times for cryo to settle and explicit data collection.  Then write data to disk.
+
+    Note: This assumes you have already opened a non-binary file for text writing.
+    """
+    # Do the common settle time now or simply check that we have a good state to begin collecting data
+    if settle_time > 0:
+        logger.info(f"Waiting {settle_time} seconds for cryo to settle.")
+        settle_start = datetime.now()
+        StateMonitor.monitor(duration=settle_time)
+        settle_end = datetime.now()
+    else:
+        StateMonitor.check_state()
+        settle_start = datetime.now()
+        settle_end = settle_start
+
+    # Do the data collection (averaging) time now
+    logger.info(f"Waiting {avg_time} seconds for MYA to collect data.")
+    avg_start = settle_end
+    StateMonitor.monitor(duration=avg_time)
+    avg_end = datetime.now()
+
+    logger.info("Writing to data log")
+    cav_names = [cav.name for cav in cavs]
+    cav_epics_names = [cav.epics_name for cav in cavs]
+    write_data_index_row(file, settle_start=settle_start, settle_end=settle_end, avg_start=avg_start,
+                         avg_end=avg_end, settle_time=settle_time, avg_time=avg_time,
+                         cavity_name=cav_names, cavity_epics_name=cav_epics_names)
+    file.flush()
