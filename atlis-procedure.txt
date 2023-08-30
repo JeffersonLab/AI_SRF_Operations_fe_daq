@@ -234,3 +234,57 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 
 # Regular C100 test
 > bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --linac-zones 1L22 --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 4 --gradient-offsets -1.0 -0.5 -0.25
+
+
+
+###########################
+######  Aug 30, 2023  #####
+###########################
+
+
+# Collecting random scans on NL.  Whole linac, but only a few cavities per sample.  Easing in.
+#> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan  --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 4 --gradient-offsets -2.0 -1.0 -0.5 -0.25 --linac-zones 1L02 1L03 1L04 1L05 1L06 1L07 1L10 1L11 1L13 1L14 1L15 1L16 1L20 1L21 1L22 1L23 1L24 1L25 1L26
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan  --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 4 --gradient-offsets -2.0 -1.0 -0.5 -0.25 --linac-zones 1L02 1L03 1L04 1L05 1L06 1L07 1L11 1L13 1L14 1L15 1L16 1L20 1L21 1L22 1L23 1L24 1L25 1L26
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan  --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 16 --gradient-offsets -2.0 -1.0 -0.5 -0.25 --linac-zones 1L02 1L03 1L04 1L05 1L06 1L07 1L11 1L13 1L14 1L15 1L16 1L20 1L21 1L22 1L23 1L24 1L25 1L26
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 10 --num-cavities 16 --gradient-offsets -2.0 -1.0 -0.5 -0.25 --linac-zones 1L02 1L03 1L04 1L05 1L06 1L07 1L11 1L13 1L14 1L15 1L16 1L20 1L21 1L22 1L23 1L24 1L25 1L26
+
+# This gave me some problems so I decided to break it up into per-zone calls
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L02 1L03 1L04 1L05 1L06 1L07 1L11 1L13 1L14 1L15 1L16 1L17 1L19 1L20 1L21 1L22 1L23 1L24 1L25 1L26
+
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L02
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L03
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L04
+
+# There were some problems where cavities tripped off that were outside the study with 1L05-1L07 scans - redo if there is time
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L05
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L06
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L07
+
+# 1L10 was off and turned back on during this scan
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L11
+
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L10
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L13
+
+# 1L13, 1L15 had some trips during this scan - redo if time
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L14
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L16
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L15
+
+# This scan had a lot of noise on it.  Maybe phase randomization is a bad idea?  Redo?
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L22
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L23
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L24
+
+# Scan exited on 1L25-3, reran
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L25
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L25
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L26
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L17
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L19
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L20
+> bin/fe_daq.bash -l NorthLinac simple_gradient_scan --settle-time 0 --average-time 3 --step-size 0.25 --num-steps 2 --linac-zones 1L21
+
+
+# Run some more combo scans since 1L10 is back up and I skipped 1L17/19 the first time around.  This took a few tries to get right because ops had to bypass a cavity.
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 16 --gradient-offsets -2.0 -1.0 -0.5 -0.25 0.25 --linac-zones 1L02 1L03 1L04 1L05 1L06 1L07 1L10 1L11 1L13 1L14 1L15 1L16 1L17 1L19 1L20 1L21 1L22 1L23 1L24 1L25 1L26
