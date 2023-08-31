@@ -521,7 +521,9 @@ class LLRF1Cavity(Cavity):
         # We want tuners to be in auto mode.  Tuners might not be used if bypassed or known tuner problem
         # 1 is auto, 0 is manual
         self.tuner_mode = epics.PV(f"{self.epics_name}TMODI", connection_callback=connection_cb)
-        if not self.tuner_bad or self.bypassed:
+        if self.tuner_bad or self.bypassed_eff:
+            logger.info(f"{self.name}: Is bypassed or tuner_bad.  Not monitoring tuner mode.")
+        else:
             self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
 
         # # What is the max steps to take at a time before checking it's effect.  100 is normal mode, 1000 is turbo
@@ -537,7 +539,7 @@ class LLRF1Cavity(Cavity):
         self.tdeta_n = epics.PV(f"{self.epics_name}TDETA{tdeta_n_suffix}", connection_callback=connection_cb)
         self.gset_min = 3
 
-        if not self.bypassed:
+        if not self.bypassed_eff:
             self.rf_on.add_callback(rf_on_cb)
 
         self.pv_list.append(self.rf_on)
@@ -629,13 +631,21 @@ class LLRF2Cavity(Cavity):
 
         self.pset_init = self.pset.get()
         self.gset_init = self.gset.get()
+
+        # Cavity can be effectively bypassed in a number of ways.  Work through that here.
+        self.bypassed_eff = bypassed
+        if self.gset_init == 0:
+            self.bypassed_eff = True
+        elif self.odvh.value == 0:
+            self.bypassed_eff = True
+
         self.fcc_firmware_version = self.fccver.get()
         if self.fcc_firmware_version is None:
             raise RuntimeError(f"{self.epics_name}: Could not get FCC Version")
 
         # Attach a callback that watches for RF to turn off or for faults.  Don't watch RF if the cavity is
         # bypassed.
-        if not self.bypassed:
+        if not self.bypassed_eff:
             self.rf_on.add_callback(rf_on_cb)
             # Only new LLRF 2.0 has this at 768
             if self.fcc_firmware_version >= 2021:
@@ -648,7 +658,9 @@ class LLRF2Cavity(Cavity):
         # We want tuners to be in auto mode.  Tuners might not be used if bypassed or known tuner problem
         # 1 is auto, 0 is manual
         self.tuner_mode = epics.PV(f"{self.epics_name}TCMDbits.B7", connection_callback=connection_cb)
-        if not self.tuner_bad or self.bypassed:
+        if self.tuner_bad or self.bypassed_eff:
+            logger.info(f"{self.name}: Tuner bad or bypassed.  Not monitoring tuner mode")
+        else:
             self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
 
         # List of all PVs related to a cavity.
@@ -781,14 +793,23 @@ class LLRF3Cavity(Cavity):
         self.pset_init = self.pset.get()
         self.gset_init = self.gset.get()
 
+        # Cavity can be effectively bypassed in a number of ways.  Work through that here.
+        self.bypassed_eff = bypassed
+        if self.gset_init == 0:
+            self.bypassed_eff = True
+        elif self.odvh.value == 0:
+            self.bypassed_eff = True
+
         # Attach a callback that watches for RF to turn off.  Don't watch "RF on" if the cavity is bypassed.
-        if not self.bypassed:
+        if not self.bypassed_eff:
             self.rf_on.add_callback(rf_on_cb)
 
         # We want tuners to be in auto mode.  Tuners might not be used if bypassed or known tuner problem
         # 1 is auto, 0 is manual
         self.tuner_mode = epics.PV(f"{self.epics_name}TCMDbits.B7", connection_callback=connection_cb)
-        if not self.tuner_bad or self.bypassed:
+        if self.tuner_bad or self.bypassed_eff:
+            logger.info(f"{self.name}: Tuner bad or bypassed.  Not monitoring tuner mode.")
+        else:
             self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
 
         # List of all PVs related to a cavity.
@@ -797,12 +818,7 @@ class LLRF3Cavity(Cavity):
                                        self.fsd7, self.fsd8]
         self.pv_list = [pv for pv in self.pv_list if pv is not None]
 
-        # Cavity can be effectively bypassed in a number of ways.  Work through that here.
-        self.bypassed_eff = bypassed
-        if self.gset_init == 0:
-            self.bypassed_eff = True
-        elif self.odvh.value == 0:
-            self.bypassed_eff = True
+
 
         # Each cavity keeps track of an externally set maximum value.  Make sure to update this after connecting to PVs.
         self.gset_max = self.gset_min
