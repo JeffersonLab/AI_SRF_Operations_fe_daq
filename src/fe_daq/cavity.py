@@ -225,11 +225,16 @@ class Cavity:
             wait_interval = self.gmes_sleep_interval
 
         # Determine step direction
-        actual_gset = self.gset.get(use_monitor=False)
-        if gset >= actual_gset:
-            step_dir = 1
-        else:
-            step_dir = -1
+        actual_gset = None
+        while actual_gset is None:
+            actual_gset = self.gset.get(use_monitor=False)
+            if actual_gset is None:
+                logger.warning(f"{self.name}: Error getting gset.  Waiting 15 seconds then retrying.")
+                StateMonitor.monitor(duration=15)
+            if gset >= actual_gset:
+                step_dir = 1
+            else:
+                step_dir = -1
 
         if gset > self.gset_max:
             msg = f"Requested {self.name} gradient higher than max allowed GSET {self.gset_max}."
@@ -649,13 +654,6 @@ class LLRF2Cavity(Cavity):
         # List of all PVs related to a cavity.
         self.pv_list = self.pv_list + [self.rf_on, self.deta, self.stat1, self.fsd, self.fccver, self.cfqe,
                                        self.detahzhi, self.tuner_mode]
-
-        # Cavity can be effectively bypassed in a number of ways.  Work through that here.
-        self.bypassed_eff = bypassed
-        if self.gset_init == 0:
-            self.bypassed_eff = True
-        elif self.odvh.value == 0:
-            self.bypassed_eff = True
 
         # Each cavity keeps track of an externally set maximum value.  Make sure to update this after connecting to PVs.
         self.gset_max = self.gset_min
