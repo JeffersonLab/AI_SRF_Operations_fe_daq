@@ -1037,7 +1037,7 @@ def update_cavity_gsets_parallel(cavs: List[Cavity], new_gsets: Dict[str, float]
 def update_gsets_failure_prompt(failed: List[Cavity]):
     # Exit the executor context manager to close out the thread pool.  Now process the results
     if len(failed) > 0:
-        user_alert_update_gsets_fail(failed=failed)
+        status = user_alert_update_gsets_fail(failed=failed)
         # print(f"Cavities {','.join([cav.name for cav in failed])} failed to update.  Options:")
         # print(f"(R) Retry cavity updates")
         # print(f"(A) Abort collection procedure.  PSETs restored, no further gradient changes.")
