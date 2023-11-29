@@ -558,4 +558,5 @@ class LinacFactory:
         for cavity in linac.cavities.values():
             cavity.wait_for_connections()
             cavity.update_gset_max()
+            cavity.run_callbacks()
         logger.info("Done waiting for EPICS CA connections.")
