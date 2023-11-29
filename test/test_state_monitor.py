@@ -146,7 +146,7 @@ class TestStateMonitor(TestCase):
         cav.rf_on.put(1, wait=True)
 
         # Check that the StateMonitor sees bad HV
-        ndxe = NDXElectrometer(name="NDX1L05", epics_name=f"{prefix}NDX1L05")
+        ndxe = NDXElectrometer(name="NDX1L05", epics_name=f"{prefix}NDX1L05", I400=1)
         old_value = ndxe.hv_read_back.get(use_monitor=False)
         ndxe.hv_read_back.put(0, wait=True)
         time.sleep(0.01)
