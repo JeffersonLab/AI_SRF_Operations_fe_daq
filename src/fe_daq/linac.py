@@ -558,5 +558,8 @@ class LinacFactory:
         for cavity in linac.cavities.values():
             cavity.wait_for_connections()
             cavity.update_gset_max()
+
+        # Do a second loop to make sure that all of the connections and callbacks have had time to initialize
+        for cavity in linac.cavities.values():
             cavity.run_callbacks()
         logger.info("Done waiting for EPICS CA connections.")
