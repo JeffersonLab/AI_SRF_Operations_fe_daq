@@ -727,7 +727,11 @@ class LLRF2Cavity(Cavity):
             logger.info(f"Change requested gset to gset_max ({self.gset_max}).  Likely rounding error.")
             gset = self.gset_max
 
-        self._validate_requested_gradient(gset=gset, force=force)
+        try:
+            self._validate_requested_gradient(gset=gset, force=force)
+        except Exception as ex:
+            logger.error(f"{self.name}: Error with requested gradient {gset} (force={force}).  {ex}")
+            raise ex
         # Newer style cavities are ramping in this software, so we don't have to wait and watch for external ramping.
         if self.fcc_firmware_version > 2019:
             wait_for_ramp = False
@@ -735,8 +739,13 @@ class LLRF2Cavity(Cavity):
         # Newer style control systems provide ramping that track detune issues, but not necessarily anything else.
         # It's safest to always ramp, since the worst case scenario is that we wait a little longer while than
         # necessary at the cost of not exceeding cryo, etc. limits.
-        self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
-                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
+        try:
+            self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
+                                      ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
+        except Exception as ex:
+            logger.error(f"{self.name}: Error ramping gradient to {gset}.  {ex}")
+            traceback.print_exc()
+            raise ex
 
 
 class LLRF3Cavity(Cavity):
@@ -879,10 +888,20 @@ class LLRF3Cavity(Cavity):
             logger.info(f"Change requested gset to gset_max ({self.gset_max}).  Likely rounding error.")
             gset = self.gset_max
 
-        self._validate_requested_gradient(gset=gset, force=force)
+        try:
+            self._validate_requested_gradient(gset=gset, force=force)
+        except Exception as ex:
+            logger.error(f"{self.name}: Error with requested gradient {gset} (force={force}).  {ex}")
+            raise ex
+
         # self.wait_for_tuning()
-        self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
-                                  ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
+        try:
+            self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=wait_for_ramp,
+                                      ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
+        except Exception as ex:
+            logger.error(f"{self.name}: Error ramping gradient to {gset}.  {ex}")
+            traceback.print_exc()
+            raise ex
 
 
 def collect_data_at_gradients(cavs: List[Cavity], new_gsets: Dict[str, float], old_gsets: Dict[str, float],
