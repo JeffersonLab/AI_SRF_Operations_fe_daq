@@ -418,6 +418,7 @@ class Cavity:
         hits a lower limit.  We don't want to keep changing gradient (and forcing more detuning) when the cavity is
         past the upper limit, but we don't want to wait until the tuners are completely done.
         """
+
         # Determine step direction
         actual_gset = None
         while actual_gset is None:
@@ -501,6 +502,14 @@ class Cavity:
             if not pv.connected:
                 if not pv.wait_for_connection(timeout=timeout):
                     raise Exception(f"PV {pv.pvname} failed to connect.")
+
+    def run_callbacks(self):
+        """Run all user defined callbacks right now.
+
+        This is helpful in case some cavity PV is in a bad state prior to attaching the callback.
+        """
+        for pv in self.pv_list:
+            pv.run_callbacks()
 
 
 class LLRF1Cavity(Cavity):
