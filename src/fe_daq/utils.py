@@ -40,7 +40,7 @@ def user_alert_scan_paused(msg: str, level: int = logging.WARNING) -> bool:
     root = tk.Tk()
     root.overrideredirect(1)
     root.withdraw()
-    do_continue = tk.messagebox.askyesno(title="FE Gradient Scan Paused", message=f"{msg}\n\nContinue?", width=160)
+    do_continue = tk.messagebox.askyesno(title="FE Gradient Scan Paused", message=f"{msg}\n\nContinue?")
     root.destroy()
     if do_continue:
         logger.log(level=level, msg=f"User requested yes (continue/retry)")
@@ -50,13 +50,12 @@ def user_alert_scan_paused(msg: str, level: int = logging.WARNING) -> bool:
     return do_continue
 
 
-def user_alert_update_gsets_fail(failed: List["Cavity"]):
+def user_alert_update_gsets_fail(failed: List["Cavity"]) -> "Status":
     msg = f"Cavities {','.join([cav.name for cav in failed])} failed to update."
     logger.error(msg)
 
     # Setup basic GUI elements
     response = ""
-    var = tk.StringVar("R")
     root = tk.Tk()
     label1 = tk.Label(text=msg, width=160)
     label1.pack()
@@ -68,6 +67,7 @@ def user_alert_update_gsets_fail(failed: List["Cavity"]):
         "S": "Skip cavity, Rollback Gradients",
         "K": "Accept current gradients for this sample"
     }
+    var = tk.StringVar(value="R")
     for (value, text) in options.items():
         ttk.Radiobutton(root, text=text, variable=var, value=value).pack(side=tk.LEFT)
 
