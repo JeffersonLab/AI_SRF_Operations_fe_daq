@@ -230,8 +230,8 @@ class Cavity:
             actual_gset = self.gset.get(use_monitor=False)
             if actual_gset is None:
                 logger.warning(f"{self.name}: Error getting gset.  Waiting 15 seconds then retrying.")
-                StateMonitor.monitor(duration=15)
-            if gset >= actual_gset:
+                StateMonitor.monitor(duration=15, user_input=False)
+            elif gset >= actual_gset:
                 step_dir = 1
             else:
                 step_dir = -1
@@ -342,7 +342,7 @@ class Cavity:
 
         if settle_time > 0:
             logger.info(f"{self.name}: Waiting {settle_time} seconds for cryo to adjust")
-        StateMonitor.monitor(duration=settle_time)
+        StateMonitor.monitor(duration=settle_time, user_input=False)
 
     def _wait_for_jt(self, timeout: float):
         """ Check to see if JT valve is too open.  Wait for it to recover if so.
@@ -419,11 +419,17 @@ class Cavity:
         past the upper limit, but we don't want to wait until the tuners are completely done.
         """
         # Determine step direction
-        actual_gset = self.gset.get(use_monitor=False)
-        if gset >= actual_gset:
-            step_dir = 1
-        else:
-            step_dir = -1
+        actual_gset = None
+        while actual_gset is None:
+            actual_gset = self.gset.get(use_monitor=False)
+            if actual_gset is None:
+                logger.warning(f"{self.name}: Error getting gset.  Waiting 15 seconds then retrying.")
+                StateMonitor.monitor(duration=15, user_input=False)
+            elif gset >= actual_gset:
+                step_dir = 1
+            else:
+                step_dir = -1
+
 
         # logger.info(f"{self.name}: Manually ramping gradient from {actual_gset} to {gset} in {self.gmes_step_size}"
         #             f" MV/m steps with {self.gmes_sleep_interval}s waits.")
