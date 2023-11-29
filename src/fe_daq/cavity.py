@@ -606,6 +606,13 @@ class LLRF1Cavity(Cavity):
         """
 
         logger.info(f"{self.name}: Setting gradient from {self.gset.value} to {gset}.")
+
+        # Sometimes we end up some small delta above the max by rounding errors.  If we're close, just treat it like a
+        # set to the max.
+        if (gset > self.gset_max) and ((gset - 0.0001) < self.gset_max):
+            logger.info(f"Change requested gset to gset_max ({self.gset_max}).  Likely rounding error.")
+            gset = self.gset_max
+
         self._validate_requested_gradient(gset=gset, force=force)
         self._do_gradient_ramping(gset=gset, settle_time=settle_time, wait_for_ramp=False,
                                   ramp_timeout=ramp_timeout, gradient_epsilon=gradient_epsilon, interactive=interactive)
