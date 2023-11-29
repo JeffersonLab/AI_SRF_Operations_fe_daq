@@ -265,7 +265,7 @@ __threshold_exceeded: {ascii(cls.__threshold_exceeded)}"""
         """Sleep while periodically checking if we 're still in a good DAQ state.  Raises if we have a problem.
 
         Args:
-            duration: How long should we monitor for?  If none, do one check and exit.
+            duration: How long should we monitor for in seconds?  If none, do one check and exit.
             user_input: Should we wait on user input (True, default) or immediately raise an exception
         """
         # If we're given a settle time, then sleep in small increments until that time is up.  Check the state after
