@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from operator import attrgetter
 from typing import Union, List, Optional, Dict, Tuple
 
-from fe_daq.cavity import Cavity
+from fe_daq.cavity import Cavity, collect_data_at_gradients
 from fe_daq.linac import Zone, Linac
 from fe_daq.state_monitor import StateMonitor
 from fe_daq.exceptions import UserScanAbort
@@ -755,8 +755,9 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
                     for gset_next in gsets:
                         try:
                             gset_curr = cavity.gset.value
-                            logger.info("Jiggling linac phases within +/- 5 degrees of initial")
-                            linac.jiggle_psets(5.0)
+                            # We jiggled phases for a long time, but I don't see the point in adding that noise
+                            # logger.info("Jiggling linac phases within +/- 5 degrees of initial")
+                            # linac.jiggle_psets(5.0)
 
                             # Here we are allowing larger step sizes than 1 MV/m (force=True)
                             StateMonitor.check_state()
@@ -878,11 +879,12 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
                     logger.info("Skipping this sample round due to large heat changes.")
                     continue
 
+                # We used to jiggle psets, but now it seems like I'm only adding unhelpful noise.
                 # Jiggle PSETs to make predictions slightly more robust to a likely source of noise
-                linac.jiggle_psets(delta=5.0)
+                # linac.jiggle_psets(delta=5.0)
 
                 # Do the updates, and track in the lookup index file.
-                utils.collect_data_at_gradients(cavs=cavs, new_gsets=new_gsets, old_gsets=old_gsets,
+                collect_data_at_gradients(cavs=cavs, new_gsets=new_gsets, old_gsets=old_gsets,
                                           settle_time=settle_time, avg_time=avg_time, file=f)
 
             except UserScanAbort:
