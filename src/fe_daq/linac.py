@@ -39,7 +39,7 @@ class Linac:
             self.autoheat_mode = epics.PV(f"{prefix}CAPBON", connection_callback=connection_cb)
         elif name == "SouthLinac":
             self.linac_pressure = epics.PV(f"{prefix}CPI5107B", connection_callback=connection_cb)
-            self.heater_margin = epics.PV(f"{prefix}CAPHTR2MGN", connection_callback=connection_cb)
+            self.heater_margin = epics.PV(f"{prefix}CAP2HTRMGN", connection_callback=connection_cb)
             self.autoheat_mode = epics.PV(f"{prefix}CAP2BON", connection_callback=connection_cb)
         else:
             raise ValueError(f"Unsupported linac name '{name}'")
