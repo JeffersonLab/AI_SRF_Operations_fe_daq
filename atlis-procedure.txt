@@ -498,3 +498,53 @@ bin/fe_daq.bash -l SouthLinac fe_onset -z 2L22
 
 # One more sample while I wait for the NL
 > bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 186 --gradient-offsets -0.5 -0.45 -0.4 -0.35 -0.3 -0.25 -0.2 -0.15 -0.1 -0.05 0.0 0.05 0.1 0.15 0.2 --linac-zones 2L02 2L03 2L04 2L05 2L06 2L07 2L08 2L09 2L10 2L11 2L12 2L13 2L14 2L15 2L16 2L17 2L18 2L19 2L20 2L21 2L23 2L24 2L25 2L26
+
+
+
+###########################
+#####  Mar 17, 2024   #####
+###########################
+
+### North Linac Work
+# Bypassed cavities: 1L09 (all), 1L04-3, 1L06-4, 1L12-2, 1L12-6
+# Set config to all ODVH + 0.5, but changed after initial difficulties on first command to ODVH + 0.25, then changed again to just ODVH.
+
+# All cavities with a tricky range.  Bigger big step this time and more small steps.  And try with a higher turn up.
+# The funny repeats keep the total gradient offsets closer to zero.  It's like a poor man's version of keeping the total linac energy close to constant.
+# For the first run tonight, limit the number of cavities I change to something smaller.
+# I tried this command a few times and got tripped up.  Eventually asked ops to run LEM to make sure linac was close to operational values and all initial gsets were at or below ODVH values.
+# Also first few attempts mistakenly set SL limits to ODVH + 0.5.
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 40 --gradient-offsets -3.0 -0.5 -0.45 -0.4 -0.35 -0.3 -0.25 -0.2 -0.15 -0.1 -0.05 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2
+
+# This is where I switched to ODVH + 0.25
+> bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 40 --gradient-offsets -3.0 -0.5 -0.45 -0.4 -0.35 -0.3 -0.25 -0.2 -0.15 -0.1 -0.05 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2
+
+# Increased the number of cavities - this failed pretty fast due to cavity trips.  I bailed and set limit to ODVH, not above.
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 160 --gradient-offsets -3.0 -0.5 -0.45 -0.4 -0.35 -0.3 -0.25 -0.2 -0.15 -0.1 -0.05 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2
+
+# Make more smaller changes going down.  Tried to keep things roughly gradient neutral - don't exceed ODVH.  This also failed right up front.
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 160 --gradient-offsets -1.5 -1.0 -0.5 -0.45 -0.4 -0.35 -0.3 -0.25 -0.2 -0.15 -0.1 -0.05 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2
+
+# I tightened the relative heat change tolerance per zone from 20% to 10%.  I am also making a lot of small changes with fewer big changes and fewer cavities total
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 80 --gradient-offsets -1.0 -0.5 -0.45 -0.4 -0.35 -0.3 -0.25 -0.2 -0.15 -0.1 -0.05 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3 0.4 0.5 0.0 0.05 0.1 0.15 0.2 0.3
+
+# That worked OK.  Let's try to get rid of some of those really small changes.
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 80 --gradient-offsets -1.0 -0.5 -0.45 -0.4 -0.35 -0.3 -0.25 -0.2 -0.15 0.0 0.15 0.2 0.3 0.4 0.5 0.15 0.2 0.3 0.4 0.5 0.15 0.2 0.3 0.4 0.5
+
+# That worked OK, but the energy gain is dropping a bunch.  Added more positive offsets.
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 80 --gradient-offsets -1.0 -0.5 -0.45 -0.4 -0.35 -0.3 -0.25 -0.2 -0.15 0.0 0.15 0.2 0.3 0.4 0.5 0.15 0.2 0.3 0.4 0.5 0.15 0.2 0.3 0.4 0.5 0.3 0.4 0.5
+
+# That worked OK, but the energy gain is still dropping a bunch.  Remove the small negative changes.  Had to bail on this one too because one cavity could not get happy.
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 80 --gradient-offsets -1.0 -0.5 0.0 0.15 0.2 0.3 0.4 0.5 0.15 0.2 0.3 0.4 0.5 0.15 0.2 0.3 0.4 0.5 0.3 0.4 0.5
+
+# Try to simplify the positive changes and ensure the EMES changes are smaller.  Only do one measurement to see how it works.
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 80 --gradient-offsets -1.0 -0.5 0.25 0.25 0.25 0.25 0.25 0.25
+
+# EMES still dropped a lot - ran this three times and on the third one relaxed my zone heat restrictions
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 80 --gradient-offsets -1.0 -0.5 0.25 0.25 0.25 0.5 0.5 0.5
+
+# Still fight the EMES drop.  Maybe many cavities can't turn up by 0.25?  Try more smaller step ups.
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 80 --gradient-offsets -1.0 -0.5 0.05 0.1 0.15 0.2 0.25 0.5
+
+# Still fight the EMES drop.  Only let them turn down by -1.
+bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 80 --gradient-offsets -1.0 0.05 0.1 0.15 0.2 0.25 0.5
