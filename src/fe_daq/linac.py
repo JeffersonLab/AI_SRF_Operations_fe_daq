@@ -528,12 +528,8 @@ class LinacFactory:
 
             # Pull a new GSET limit from config file.
             gset_max = config.get_parameter(['gset_max', p['EPICSName']])
-            # gset_max = None
-            # if 'gset_max' in Config.config and p['EPICSName'] in Config.config['gset_max']:
-            #     gset_max = Config.config['gset_max'][p['EPICSName']]
 
             if config.get_parameter(['skip_cavity', p['EPICSName']]) is not None:
-            # if 'skip_cavity' in Config.config and p['EPICSName'] in Config.config['skip_cavity']:
                 logger.info(f"Skipping {name} per configuration file.")
                 continue
 
