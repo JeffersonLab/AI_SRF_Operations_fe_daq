@@ -525,14 +525,6 @@ class LLRF1Cavity(Cavity):
         self.rf_on = epics.PV(f"{self.epics_name}ACK1.B6", connection_callback=connection_cb)
         self.tdeta = epics.PV(f"{self.epics_name}TDETA", connection_callback=connection_cb)
 
-        # P1 from microcontroller
-        self.fsd1 = epics.PV(f"{self.epics_name}STAT.B3", connection_callback=connection_cb)
-        self.fsd1.add_callback(get_threshold_cb(low=0, high=0))  # == 1 implies fault
-
-        # P1 from IOC
-        self.fsd2 = epics.PV(f"{self.epics_name}STAT.B4", connection_callback=connection_cb)
-        self.fsd2.add_callback(get_threshold_cb(low=0, high=0))  # == 1 implies fault
-
         # We want tuners to be in auto mode.  Tuners might not be used if bypassed or known tuner problem
         # 1 is auto, 0 is manual
         self.tuner_mode = epics.PV(f"{self.epics_name}TMODI", connection_callback=connection_cb)
@@ -540,6 +532,11 @@ class LLRF1Cavity(Cavity):
             logger.info(f"{self.name}: Is bypassed or tuner_bad.  Not monitoring tuner mode.")
         else:
             self.tuner_mode.add_callback(get_threshold_cb(low=1, high=1))  # == 1 implies auto mode
+
+        # P1 from microcontroller
+        self.fsd1 = epics.PV(f"{self.epics_name}STAT.B3", connection_callback=connection_cb)
+        # P1 from IOC
+        self.fsd2 = epics.PV(f"{self.epics_name}STAT.B4", connection_callback=connection_cb)
 
         # # What is the max steps to take at a time before checking it's effect.  100 is normal mode, 1000 is turbo
         # self.tuner_turbo = epics.PV(f"{self.epics_name}THDRV.C", connection_callback=connection_cb)
@@ -554,8 +551,11 @@ class LLRF1Cavity(Cavity):
         self.tdeta_n = epics.PV(f"{self.epics_name}TDETA{tdeta_n_suffix}", connection_callback=connection_cb)
         self.gset_min = 3
 
+        # Don't monitor faults on cavities that effectively bypassed.
         if not self.bypassed_eff:
             self.rf_on.add_callback(rf_on_cb)
+            self.fsd1.add_callback(get_threshold_cb(low=0, high=0))  # == 1 implies fault
+            self.fsd2.add_callback(get_threshold_cb(low=0, high=0))  # == 1 implies fault
 
         self.pv_list.append(self.rf_on)
         self.pv_list.append(self.tdeta)
