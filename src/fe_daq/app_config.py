@@ -10,15 +10,13 @@ import operator
 logger = logging.getLogger(__name__)
 
 
-# The root directory of the app
-app_root = os.path.realpath(os.path.join(os.path.basename(__file__), ".."))
-
-# CSUE variables
-hbase = os.environ['HBASE']
-csue_app_letter = 'f'
-csue_app_name = 'fe_daq'
-csue_app_version = 'dvl'
-csue_app_path = f"{hbase}/apps/{csue_app_letter}/{csue_app_name}/{csue_app_version}"
+# The root directory of the app.  Commented out version is root if not in csue
+#app_root = os.path.realpath(os.path.join(os.path.basename(__file__), ".."))
+app_root = os.path.realpath(os.path.join(os.path.dirname(__file__), 
+                                         "..", "..", "..", ".."))
+# CSUE variables - challenging to use these if not using CSUE templates.
+# Instead, use a relative path to identify the root directory for this version.
+csue_app_path = app_root
 csue_log_dir = f"{csue_app_path}/fileio/log"
 csue_config_dir = f"{csue_app_path}/fileio/config"
 
