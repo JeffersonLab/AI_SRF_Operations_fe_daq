@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Tuple, Optional
 import requests
 import epics
+import numpy as np
 
 from fe_daq.cavity import Cavity
 from fe_daq import app_config as config
@@ -53,6 +54,9 @@ class Linac:
         self.autoheat_mode.add_callback(get_threshold_cb(low=1, high=1))
 
         self.pv_list = [self.linac_pressure, self.heater_margin, self.autoheat_mode]
+
+        # Can't get this until connections have been made
+        self.energy_init = None
 
     def wait_for_connections(self, timeout: float = 2.0):
         """Wait for all of the PVs associated with this Linac to connect.  Raise exception if that doesn't happen."""
@@ -219,6 +223,137 @@ class Linac:
 
         return is_rad, max_t, max_detector
 
+    def get_linac_energy(self, gsets: Optional[Dict[str, float]] = None) -> float:
+        """Calculate the linac energy gain given a dictionary of cavity names and their new gradient.
+
+        If a cavity is not included in the map, then it's current gradient is used.
+        """
+        energy = 0.0
+        for cav in self.cavities.values():
+            if gsets is None:
+                energy += cav.calculate_energy()
+            elif cav.name in gsets.keys():
+                energy += cav.calculate_energy(gsets[cav.name])
+            else:
+                energy += cav.calculate_energy()
+
+        return energy
+
+    def get_max_energy(self) -> float:
+        """Calculate the linac energy gain given a dictionary of cavity names and their new gradient.
+
+        If a cavity is not included in the map, then it's current gradient is used.
+        """
+        energy = 0.0
+        for cav in self.cavities.values():
+            energy += cav.calculate_energy(cav.gset_max)
+
+        return energy
+
+    def get_min_energy(self) -> float:
+        """Calculate the linac energy gain given a dictionary of cavity names and their new gradient.
+
+        If a cavity is not included in the map, then it's current gradient is used.
+        """
+        energy = 0.0
+        for cav in self.cavities.values():
+            energy += cav.calculate_energy(cav.gset_min)
+
+        return energy
+
+    def scale_gradients_to_meet_energy(self, gsets: Dict[str, float]) -> Tuple[List[Cavity],
+                                                                               Dict[str, float],
+                                                                               Dict[str, float],
+                                                                               Dict['Zone', List[Optional[float]]]]:
+        """Scale the linac up or down to meet the target linac energy.
+
+        This will adjust all cavities in the linac, not only those supplied in gsets.
+        """
+        logger.info("Scaling gradients to meet energy")
+        target = self.energy_init
+        energy = self.get_linac_energy(gsets)
+        max_energy = self.get_max_energy()
+        min_energy = self.get_min_energy()
+
+        # Process cavity set
+        x = np.zeros(shape=(len(self.cavities)))
+        xu = np.zeros(shape=(len(self.cavities)))
+        xl = np.zeros(shape=(len(self.cavities)))
+        # Need to get a constant ordering of cavities to keep all the arrays consistent.
+        cav_names = sorted(self.cavities.keys())
+
+        debug_idx = None
+        for idx, cav_name in enumerate(cav_names):
+            cav = self.cavities[cav_name]
+            if cav_name in gsets.keys():
+                gset = gsets[cav_name]
+            else:
+                gset = cav.gset.value
+
+            # store the requested value and the upper and lower bounds for this cavity
+            x[idx] = gset
+            xu[idx] = cav.gset_max
+            xl[idx] = cav.gset_min
+
+            if cav_name == '1L22-1':
+                debug_idx = idx
+
+        # Scale all the gradients to meet the energy
+        if target > energy:
+            x_new = self._scale_solution_up(x=x, xu=xu, energy=energy, target_energy=target, max_energy=max_energy)
+        elif target < energy:
+            x_new = self._scale_solution_down(x=x, xl=xl, energy=energy, target_energy=target, min_energy=min_energy)
+        else:
+            x_new = None
+
+        # Track what the gradients are changing per cavity (by name)
+        if x_new is None:
+            # No scaling required.  Just use what you had.
+            new_gsets = gsets
+        else:
+            # Map the gsets back to cavity names.
+            new_gsets = {}
+            for idx, name in enumerate(cav_names):
+                # We only want to track the cavities that are changing
+                if x[idx] == x_new[idx]:
+                    continue
+                new_gsets[name] = x_new[idx]
+
+        # Get what the original values are (by cavity name) and organize the new gsets according to zone
+        zones_gsets = {}
+        old_gsets = {}
+        cavities = []
+        for cav_name in new_gsets.keys():
+            cavities.append(self.cavities[cav_name])
+            old_gsets[cav_name] = self.cavities[cav_name].gset.value
+
+            # Get the changes by zone.  Needed for other calculations like heat change.
+            cav = self.cavities[cav_name]
+            if cav.zone not in zones_gsets.keys():
+                zones_gsets[cav.zone] = [None] * 8
+            zones_gsets[cav.zone][cav.cavity_number - 1] = new_gsets[cav.name]
+
+        return cavities, new_gsets, old_gsets, zones_gsets
+
+    @staticmethod
+    def _scale_solution_up(x: np.ndarray, xu: np.ndarray, energy: float, target_energy: float, max_energy: float)\
+            -> np.ndarray:
+        """Scale individual gradients up based on their available gradient margin to meet linac energy targets"""
+        headroom_frac_needed = (target_energy - energy) / (max_energy - energy)
+        if headroom_frac_needed > 1:
+            logger.warning(f"Target energy to high ({target_energy} > {max_energy}).  Scaling to energy_max.")
+            headroom_frac_needed = 1
+        return x + (xu - x) * headroom_frac_needed
+
+    @staticmethod
+    def _scale_solution_down(x: np.ndarray, xl: np.ndarray, energy: float, target_energy: float,
+                             min_energy: float) -> np.ndarray:
+        """Scale individual gradients down based on their available gradient margin to meet linac energy targets"""
+        headroom_frac_needed = (energy - target_energy) / (energy - min_energy)
+        if headroom_frac_needed > 1:
+            logger.warning(f"Target energy too low ({target_energy} < {min_energy}).  Scaling to min energy.")
+        return x - (x - xl) * headroom_frac_needed
+
 
 class Zone:
     def __init__(self, name: str, linac: Linac, controls_type: str, jt_max: float, prefix: str = "",
@@ -335,6 +470,7 @@ class LinacFactory:
 
         # Make sure that the linac PVs connect.  The _setup_* methods should do the same.
         linac.wait_for_connections()
+        linac.energy_init = linac.get_linac_energy()
 
         return linac
 

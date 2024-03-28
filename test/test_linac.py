@@ -218,6 +218,56 @@ class TestLinac(TestCase):
             self.assertTrue(is_rad,
                             f"{ndxd.name}: Rad too low, g_t: {ndxd.get_gamma_t_stat()}, n_t: {ndxd.get_neutron_t_stat()}")
 
+    def test_scale_solution_up(self):
+        x = np.ones(shape=(10,))
+        xu = np.array([1, 2, 1, 1.1, 2, 1, 3, 4, 1, 4])
+        energy = 10
+        target_energy = 15
+        max_energy = 20
+
+        result = Linac._scale_solution_up(x=x, xu=xu, energy=energy, target_energy=target_energy, max_energy=max_energy)
+        exp = np.array([1, 1.5, 1, 1.05, 1.5, 1, 2, 2.5, 1, 2.5])
+        self.assertListEqual(exp.tolist(), result.tolist())
+
+    def test_scale_solution_down(self):
+        x = np.ones(shape=(10,)) * 1
+        xl = np.array([1, 0.5, 1, 0.9, 0.5, 1, 0.2, 0.1, 1, 0.1])
+        energy = 30
+        target_energy = 20
+        min_energy = 10
+
+        result = Linac._scale_solution_down(x=x, xl=xl, energy=energy, target_energy=target_energy, min_energy=min_energy)
+        exp = np.array([1, 0.75, 1, 0.95, 0.75, 1, 0.6, 0.55, 1, 0.55])
+        self.assertListEqual(exp.tolist(), result.tolist())
+
+    def test_scale_gradients_to_meet_energy(self):
+        # Do a simple test.  If we plan to lower one cavity, verify that it gets turned up by the expected amount.
+        lf = LinacFactory(testing=True)
+        linac = lf.create_linac("NorthLinac")
+        new_gsets = {'1L22-1': 5}
+
+        orig_gsets = {cav.name: cav.gset.value for cav in linac.cavities.values() if not cav.bypassed_eff}
+        curr_energy = linac.get_linac_energy(new_gsets)
+        max_energy = linac.get_max_energy()
+        ratio = (linac.energy_init - curr_energy) / (max_energy - curr_energy)
+        upper = linac.cavities['1L22-1'].gset_max
+        exp = (upper - new_gsets['1L22-1']) * ratio + new_gsets['1L22-1']
+
+        cavs, new_gsets, old_gsets, zones_gsets = linac.scale_gradients_to_meet_energy(gsets=new_gsets)
+        result = new_gsets['1L22-1']
+
+        self.assertEqual(exp, result)
+        for cav in old_gsets.keys():
+            self.assertEqual(orig_gsets[cav], old_gsets[cav])
+
+        for cav in cavs:
+            if cav.name not in old_gsets:
+                self.fail(f"Missing {cav.name} from old_gsets")
+            if cav.name not in new_gsets:
+                self.fail(f"Missing {cav.name} from new_gsets")
+            if zones_gsets[cav.zone][cav.cavity_number -1] != new_gsets[cav.name]:
+                self.fail(f"Zone GSETs does not match new gset for {cav.name}")
+
 
 class TestZone(TestCase):
 
