@@ -12,13 +12,13 @@ record(ai, "adamc:CPI5107B") {
 
 # North Linac heater margin
 record(ai, "adamc:CAPHTRMGN") {
-    field(VAL, 5)
+    field(VAL, 15)
     field(PINI, "YES")
 }
 
 # South Linac heater margin
 record(ai, "adamc:CAPHTR2MGN") {
-    field(VAL, 5)
+    field(VAL, 15)
     field(PINI, "YES")
 }
 
@@ -28,7 +28,7 @@ record(ai, "adamc:CAPBON") {
     field(PINI, "YES")
 }
 
-# South Linac heater margin
+# South Linac autoheat model
 record(ai, "adamc:CAP2BON") {
     field(VAL, 1)
     field(PINI, "YES")
