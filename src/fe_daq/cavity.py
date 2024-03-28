@@ -149,6 +149,17 @@ class Cavity:
         else:
             self.gset_max = self.gset_max_requested
 
+        # If a cavity is bypassed or gset == 0, set the max and min to 0 so nothing tries to change it.
+        # Don't use effectively bypassed_eff, as that
+        if self.bypassed or self.gset.value == 0:
+            self.gset_min = 0
+            self.gset_max = 0
+
+        # If the tuner is bad, then we shouldn't change the gradient.  Without retuning, the cavity would quickly trip.
+        if self.tuner_bad:
+            self.gset_min = self.gset.value
+            self.gset_max = self.gset.value
+
     def is_rf_on(self):
         raise NotImplementedError("Must be implemented by child classes")
 
