@@ -815,7 +815,7 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
 def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float, data_file: str, n_samples: int,
                                                   settle_time: float = 6.0, n_cavities: int = 10,
                                                   offset_list: Optional[List[float]] = None,
-                                                  max_zone_heat_change: float = 10.0) -> None:
+                                                  max_zone_heat_change: float = 10.0, repair: bool = False) -> None:
     """This randomly selects cavities and applies a random offset perturbation to gradients from their initial setting.
 
     At each iteration, n_cavities are selected to be perturbed.  Then each cavity's gradient is changed by a small
@@ -864,6 +864,9 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
                 cavs, new_gsets, old_gsets, zones_gsets = get_random_cavity_gradients_changes(
                     population=list(available_cavities.values()),
                     n_cavities=n_cavities, offset_list=offset_list)
+                if repair:
+                    # Scale the gradients up across the whole linac to meet the energy.
+                    cavs, new_gsets, old_gsets, zones_gsets = linac.scale_gradients_to_meet_energy(gsets=new_gsets)
 
                 # Check that the gradients won't affect heat too much in a given CM
                 skip = False

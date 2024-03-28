@@ -115,6 +115,9 @@ def main() -> int:
     random_gradient.add_argument('-M', '--max-zone-heat-change', required=False, type=float,
                                  help="The maximum absolute percent heat change allowed in an individual cryomodule",
                                  default=10.0)
+    random_gradient.add_argument('-r', '--repair-samples', required=False, action='store_true',
+                                 help="Attempt to repair samples by scaling gradients to produce the same linac energy",
+                                 default=False)
 
 
     try:
@@ -221,6 +224,7 @@ def main() -> int:
                 linac.restore_psets()
         elif args.command == 'random_sample_gradient_scan':
             print(args)
+            repair = args.repair_samples
             zone_names = args.linac_zones
             average_time = float(args.average_time)
             settle_time = float(args.settle_time)
@@ -241,7 +245,8 @@ def main() -> int:
                                                                          n_cavities=num_cavities,
                                                                          settle_time=settle_time,
                                                                          offset_list=gradient_offsets,
-                                                                         max_zone_heat_change=max_zone_heat_change)
+                                                                         max_zone_heat_change=max_zone_heat_change,
+                                                                         repair=repair)
             finally:
                 # Put the PSETs back where you found them.  If the user exits in the middle of the scan, we want to
                 # return PSETs no matter what.
