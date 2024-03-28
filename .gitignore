@@ -1,3 +1,5 @@
+.cvsignore
+CVS/
 /.idea/
 /test/ioc/scripts/pid.txt
 __pycahe__/
