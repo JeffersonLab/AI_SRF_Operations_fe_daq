@@ -202,6 +202,33 @@ class Cavity:
         # gradient is units of MV/m. formula expects V/m, so 1e12
         return (g * g * self.length * 1e12) / (self.shunt_impedance * self.Q0)
 
+    def _get_step_direction(self, gset) -> Tuple[int, float]:
+        """Determine the direction the gradient is changing.  Will wait if the gset PV value is None.
+
+        The waiting happens because there are occasional issues where the gset PV returns a value of None with a timeout
+        of ~1 second.  Waiting 15 seconds seems to allow this problem to always resolve itself.
+
+        Args:
+            gset: The requested new gradient.
+
+        Returns:
+            Step direction (-1 if lowering, 1 if raising), the current value of the gset PV
+        """
+        step_dir = None
+        actual_gset = None
+        while step_dir is None:
+            actual_gset = self.gset.get(use_monitor=False)
+            if actual_gset is None:
+                logger.warning(f"{self.name}: Error getting gset.  Waiting 15 seconds then retrying.")
+                StateMonitor.monitor(duration=15, user_input=False)
+            elif gset >= actual_gset:
+                step_dir = 1
+            else:
+                step_dir = -1
+
+        return step_dir, actual_gset
+
+
     def walk_gradient(self, gset: float, step_size: Optional[float] = 1.0, wait_interval: Optional[float] = 0,
                       **kwargs) -> None:
         """Move the gradient of the cavity to gset in steps.  All cavities should ramp themselves.
@@ -225,16 +252,7 @@ class Cavity:
             wait_interval = self.gmes_sleep_interval
 
         # Determine step direction
-        actual_gset = None
-        while actual_gset is None:
-            actual_gset = self.gset.get(use_monitor=False)
-            if actual_gset is None:
-                logger.warning(f"{self.name}: Error getting gset.  Waiting 15 seconds then retrying.")
-                StateMonitor.monitor(duration=15, user_input=False)
-            elif gset >= actual_gset:
-                step_dir = 1
-            else:
-                step_dir = -1
+        step_dir, actual_gset = self._get_step_direction(gset=gset)
 
         if gset > self.gset_max:
             msg = f"Requested {self.name} gradient higher than max allowed GSET {self.gset_max}."
@@ -420,17 +438,7 @@ class Cavity:
         """
 
         # Determine step direction
-        actual_gset = None
-        while actual_gset is None:
-            actual_gset = self.gset.get(use_monitor=False)
-            if actual_gset is None:
-                logger.warning(f"{self.name}: Error getting gset.  Waiting 15 seconds then retrying.")
-                StateMonitor.monitor(duration=15, user_input=False)
-            elif gset >= actual_gset:
-                step_dir = 1
-            else:
-                step_dir = -1
-
+        step_dir, actual_gset = self._get_step_direction(gset=gset)
 
         # logger.info(f"{self.name}: Manually ramping gradient from {actual_gset} to {gset} in {self.gmes_step_size}"
         #             f" MV/m steps with {self.gmes_sleep_interval}s waits.")
