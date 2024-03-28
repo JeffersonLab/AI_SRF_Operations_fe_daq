@@ -3,6 +3,7 @@ import time
 from datetime import datetime, timedelta
 from typing import List, Dict
 
+import epics
 from fe_daq.network import SSLContextAdapter
 import threading
 import requests
@@ -22,10 +23,12 @@ prefix = "adamc:"
 fe_active = {}  # Is a cavity field emitting? [str(pvname), bool].  Managed by gset_cb
 JT_valves = {}  # type: Dict[str, JTValve]
 
-# Gets changed in main and callback threads
+# Gets changed in main and callback threads.  Use a lock to ensure that we get consistent sets of PVs during callbacks
+# or other functions.  This looks unnecessary at first glance.
 gc_lock = threading.Lock()
 gset_changed = False  # Has an RF PV change over last iteration?  We'll use this to update radiation PVs
 gmes_changed = {}  # A dictionary of the cavities that have had a gradient change and the new gradient
+cavity_lengths = {}  # Used to track the length of each cavity by name
 
 # How the largest amount of noise in the gradient readback
 max_gradient_noise = 0.05
@@ -90,13 +93,13 @@ def save_pid():
 
 
 def setup_ndx() -> None:
-    for i in ['1L05', '1L06', '1L07', '1L08', '1L11', '1L21', '1L22', '1L23', '1L24', '1L25', '1L26', '1L27', '1S01',
+    for i in ['1L05', '1L06', '1L07', '1L08', '1L11', '1L15', '1L16', '1L21', '1L22', '1L23', '1L24', '1L25', '1L26', '1L27', '1S01',
               '1S02', '2L22', '2L23', '2L24', '2L25', '2L26', '2L27', '2S01', '2S02']:
         pv_name = f"{prefix}INX{i}_nCur"
         PVs[pv_name] = PV(pv_name)
         pv_name = f"{prefix}INX{i}_gCur"
         PVs[pv_name] = PV(pv_name)
-    for i in ['1L05', '1L07', '1L11', '1L21', '1L23', '1L25', '1L27', '2L21', '2L23', '2L25', '2L27']:
+    for i in ['1L05', '1L07', '1L11', '1L15', '1L16', '1L21', '1L23', '1L25', '1L27', '2L21', '2L23', '2L25', '2L27']:
         pv_name = f"{prefix}NDX{i}_CAPACITOR_SW"
         PVs[pv_name] = PV(pv_name)
         pv_name = f"{prefix}NDX{i}_PERIOD"
@@ -134,6 +137,7 @@ def setup_cavities() -> None:
         if 'OpsGsetMax' in elem['properties'].keys():
             max_gset = elem['properties']['OpsGsetMax']
         max_gset = float(max_gset)
+        cavity_lengths[epics_name] = float(elem['properties']['Length'])
 
         # Set the ODVH records to the CED values
         append_pairs(pv_list, val_list, f"{prefix}{epics_name}ODVH", max_gset)
@@ -299,6 +303,20 @@ class JTValve:
                 self.stroke_pv.put(np.random.uniform(40, 90))
                 logging.warning(f"{self.zone} JT valve back in spec.")
 
+def update_emes():
+    for linac in '12':
+        epicsnames = [name for name in sorted(cavity_lengths.keys()) if name[1] == linac]
+        pvs = [f"{prefix}{epicsname}GMES" for epicsname in epicsnames]
+        values = epics.caget_many(pvs)
+        lengths = []
+        for epicsname in epicsnames:
+            lengths.append(cavity_lengths[epicsname])
+        lengths = np.array(lengths)
+        emes = np.sum(values * lengths)
+        emes_pv = PV(f"{prefix}R{linac}XXEMES")
+        emes_pv.put(emes)
+
+
 
 def setup_jt_valves():
     logging.debug("Setting Up JT Valves")
@@ -329,6 +347,7 @@ if __name__ == "__main__":
 
         if len(gmes_changed.keys()) > 0:
             update_gmes()
+            update_emes()
 
         if count % 20 == 0:
             update_ndx(force_change=True)

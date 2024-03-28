@@ -26,6 +26,16 @@ record(ao, "adamc:$(E)_HV_BIAS") {
     field(PINI, "YES")
 }
 record(ao, "adamc:$(E)_HV_RBCK") {
-    field(VAL, 975)
+    field(VAL, 1000)
+    field(PINI, "YES")
+}
+
+# Newer, digiport-based NDX electrometers have different PVs
+record(ao, "adamc:$(E)_r_i400_0_HV") {
+    field(VAL, 1000)
+    field(PINI, "YES")
+}
+record(ao, "adamc:$(E)_c_i400_0_HV") {
+    field(VAL, 1000)
     field(PINI, "YES")
 }

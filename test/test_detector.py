@@ -26,7 +26,7 @@ def turned_off_cb(pvname, value, **kwargs):
 class TestNDXElectrometer(TestCase):
 
     def test_toggle_data_acquisition(self):
-        e = NDXElectrometer(name="NDX1L24", epics_name="adamc:NDX1L24")
+        e = NDXElectrometer(name="NDX1L24", epics_name="adamc:NDX1L24", I400=2)
 
         if not e.daq_enabled.wait_for_connection(timeout=2):
             self.fail(msg=f"Could not connect to {e.daq_enabled.pvname}")
@@ -46,7 +46,7 @@ class TestNDXElectrometer(TestCase):
         self.assertTrue(ndxe_toggled_off[e.daq_enabled.pvname])
 
     def test_set_for_fe_onset(self):
-        e = NDXElectrometer(name="NDX1L24", epics_name="adamc:NDX1L24")
+        e = NDXElectrometer(name="NDX1L24", epics_name="adamc:NDX1L24", I400=2)
 
         e.capacitor_switch.put(1000, wait=True)
         e.integration_period.put(2, wait=True)
@@ -57,7 +57,7 @@ class TestNDXElectrometer(TestCase):
         self.assertEqual(1, e.daq_enabled.get(use_monitor=False))
 
     def test_set_for_operations(self):
-        e = NDXElectrometer(name="NDX1L24", epics_name="adamc:NDX1L24")
+        e = NDXElectrometer(name="NDX1L24", epics_name="adamc:NDX1L24", I400=2)
 
         e.capacitor_switch.put(10, wait=True)
         e.integration_period.put(2, wait=True)

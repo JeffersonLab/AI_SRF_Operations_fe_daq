@@ -112,6 +112,13 @@ def main() -> int:
     random_gradient.add_argument('-g', '--gradient-offsets', required=False, type=float, nargs="+",
                                  help="The set of gradient offsets to draw from when randomly updating a gradient",
                                  default=None)
+    random_gradient.add_argument('-M', '--max-zone-heat-change', required=False, type=float,
+                                 help="The maximum absolute percent heat change allowed in an individual cryomodule",
+                                 default=10.0)
+    random_gradient.add_argument('-r', '--repair-samples', required=False, action='store_true',
+                                 help="Attempt to repair samples by scaling gradients to produce the same linac energy",
+                                 default=False)
+
 
     try:
         args = parser.parse_args()
@@ -119,7 +126,8 @@ def main() -> int:
         linac_name = args.linac
         testing = args.testing
 
-        config_file = config.app_root + "/fe_daq.cfg"
+        #config_file = config.app_root + "/fe_daq.cfg"
+        config_file = config.csue_config_dir + "/fe_daq.cfg"
         if os.path.isfile(config_file):
             config.parse_config_file(config_file)
         config.set_parameter('testing', testing)
@@ -128,7 +136,8 @@ def main() -> int:
         dir_name = f"run-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}"
         if testing:
             dir_name = f"run-testing-{linac_name}-{datetime.now().strftime('%Y-%m-%d_%H%M%S.%f')}"
-        log_dir = os.path.join(config.app_root, "log", dir_name)
+        #log_dir = os.path.join(config.app_root, "log", dir_name)
+        log_dir = os.path.join(config.csue_log_dir, dir_name)
         init_logging(log_dir=log_dir, run_log="fe_daq.log")
 
 
@@ -215,12 +224,14 @@ def main() -> int:
                 linac.restore_psets()
         elif args.command == 'random_sample_gradient_scan':
             print(args)
+            repair = args.repair_samples
             zone_names = args.linac_zones
             average_time = float(args.average_time)
             settle_time = float(args.settle_time)
             num_samples = args.num_samples
             num_cavities = int(args.num_cavities)
             gradient_offsets = args.gradient_offsets
+            max_zone_heat_change = args.max_zone_heat_change
             data_file = os.path.join(log_dir, "random-sample-random-offset-scan.csv")
 
             # Setup the Linac, Zones, and Cavities
@@ -233,7 +244,9 @@ def main() -> int:
                                                                          data_file=data_file, n_samples=num_samples,
                                                                          n_cavities=num_cavities,
                                                                          settle_time=settle_time,
-                                                                         offset_list=gradient_offsets)
+                                                                         offset_list=gradient_offsets,
+                                                                         max_zone_heat_change=max_zone_heat_change,
+                                                                         repair=repair)
             finally:
                 # Put the PSETs back where you found them.  If the user exits in the middle of the scan, we want to
                 # return PSETs no matter what.

@@ -3,8 +3,12 @@
 #! DBD("includes.dbd")
 #! DBDEND
 
-# LLRF new 2.0 / 3.0 zone level FCC interlock fault
-record(mbbiDirect, "adamc:R$(A)XIFLTCIEN") {
+record(ao, "adamc:R1XXEMES") {
+    field(VAL, 0)
+    field(PINI, "YES")
+}
+
+record(ao, "adamc:R2XXEMES") {
     field(VAL, 0)
     field(PINI, "YES")
 }

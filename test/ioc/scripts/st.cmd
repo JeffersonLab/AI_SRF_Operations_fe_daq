@@ -1,10 +1,15 @@
 # Soft IOC related PVs
 
+# Miscellaneous one-off PVs
+dbLoadRecords("../db/misc.db")
+
 # NDX PVs
 dbLoadRecords("../db/ndx.db", "D1=INX1L05,D2=INX1L06,E=NDX1L05")
 dbLoadRecords("../db/ndx.db", "D1=INX1L07,D2=INX1L08,E=NDX1L07")
 # IND1L10 does not exist
 dbLoadRecords("../db/ndx.db", "D1=INX1L10,D2=INX1L11,E=NDX1L10")
+dbLoadRecords("../db/ndx.db", "D1=INX1L15,D2=INX1LDNE1,E=NDX1L15")
+dbLoadRecords("../db/ndx.db", "D1=INX1L16,D2=INX1LDNE2,E=NDX1L16")
 dbLoadRecords("../db/ndx.db", "D1=INX1L22,D2=INX1L23,E=NDX1L22")
 dbLoadRecords("../db/ndx.db", "D1=INX1L24,D2=INX1L25,E=NDX1L24")
 dbLoadRecords("../db/ndx.db", "D1=INX1L26,D2=INX1L27,E=NDX1L26")
