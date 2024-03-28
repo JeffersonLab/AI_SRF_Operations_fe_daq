@@ -1,5 +1,8 @@
 # Soft IOC related PVs
 
+# Miscellaneous one-off PVs
+dbLoadRecords("../db/misc.db")
+
 # NDX PVs
 dbLoadRecords("../db/ndx.db", "D1=INX1L05,D2=INX1L06,E=NDX1L05")
 dbLoadRecords("../db/ndx.db", "D1=INX1L07,D2=INX1L08,E=NDX1L07")
