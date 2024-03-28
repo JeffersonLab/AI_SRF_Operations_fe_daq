@@ -135,6 +135,14 @@ class Cavity:
         self.gmes_step_size = gmes_step_size
         self.gmes_sleep_interval = gmes_sleep_interval
 
+    def calculate_energy(self, gset: Optional[float] = None):
+        """Calculate the cavities energy gain.  Assumes cavity is well phased.  Uses current gset if no gset given."""
+        if gset is None:
+            energy = self.length * self.gset.value
+        else:
+            energy = self.length * gset
+        return energy
+
     def update_gset_max(self, gset_max: Optional[float] = None):
         """Update the maximum allowed gset.  If gset_max is None, use the original requested gset_max at construction"""
         if gset_max is not None:
