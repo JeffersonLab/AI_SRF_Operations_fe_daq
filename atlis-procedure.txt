@@ -548,3 +548,82 @@ bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --aver
 
 # Still fight the EMES drop.  Only let them turn down by -1.
 bin/fe_daq.bash -l NorthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 80 --gradient-offsets -1.0 0.05 0.1 0.15 0.2 0.25 0.5
+
+
+
+###########################
+#####  Mar 29, 2024   #####
+###########################
+
+# Working in the SL this time.  First time I hit this I had too many cavities being sampled
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 38 --gradient-offsets -2 0 --linac-zones 2L22 2L23 2L24 2L25 2L26
+
+# Make it 1 out of 4 cavities being sample - this failed to do anything because of heat loads
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 38 --gradient-offsets -2 0 0 0  --linac-zones 2L22 2L23 2L24 2L25 2L26
+
+# Make it 1 out of 4 cavities being sample - so it looks like my weighting the sample strategy does not actual work with repeated values or zeros?
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 38 --gradient-offsets -2 0 0 0  --linac-zones 2L22 2L23 2L24 2L25 2L26
+
+# Try it again without repeats and 0.0
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 38 --gradient-offsets -2 -0.5 -0.1 0.0  --linac-zones 2L22 2L23 2L24 2L25 2L26
+
+# Try it again without repeats and 0.0.  I dropped the -M along the way.
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 38 --gradient-offsets -2 -0.5 -0.1 0.0  --linac-zones 2L22 2L23 2L24 2L25 2L26 -M 20.0
+
+# Not clear that zero is allowed for some reason.  I'll put a couple of very small offsets instead.  Doing more samples this time
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 38 --gradient-offsets -3 -1 -0.5 -0.1 -0.05  --linac-zones 2L22 2L23 2L24 2L25 2L26 -M 20.0
+
+# Doing it again.  Worked fine before.  Making big step smaller
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 38 --gradient-offsets -2 -1 -0.5 -0.1 -0.05  --linac-zones 2L22 2L23 2L24 2L25 2L26 -M 20.0
+
+# Time to try the whole linac.  I'm going to start with small offsets
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 186 --gradient-offsets -0.5 -0.1 0.1 0.2 0.3  -M 20.0
+
+# Bigger steps - failed due to heat.  Retried and failed due to heat.
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 186 --gradient-offsets -2.0 -0.5 -0.1 0.1 0.2 0.3 0.4 0.5  -M 20.0
+
+# Try bigger steps and smaller sample, but use the repair function
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 10 --gradient-offsets -2.0  -M 20.0 -r
+
+# That worked out.  Let's try bigger steps and slightly larger sample, but use the repair function.  This one failed half way through since I ran out of heater margin.
+# My guess is that cranking everything up to compensate for the turn downs happens before the other cavities can drop enough to recover the heater margin.
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 20 --gradient-offsets -3.0 -2.5 -2.0 -1.5 -1.0 -0.5  -M 20.0 -r
+
+# Add more cavities to the samples and add more small offsets.  Also lower the heater margin min from 10 to 8 to give a little wiggle room.
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 40 --gradient-offsets -3.0 -2.5 -2.0 -1.5 -1.0 -0.5 -0.4 -0.3 -0.2 -0.1  -M 20.0 -r
+
+# That had some problems were a cavity was being raised too much to compensate for the lost energy.  Sample fewer cavities this way, but keep the same range
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 20 --gradient-offsets -3.0 -2.5 -2.0 -1.5 -1.0 -0.5 -0.4 -0.3 -0.2 -0.1  -M 20.0 -r
+
+# I'm going to try some without the repair option and smaller steps just to get some data.  Failed due to zone heat, so I dropped the -2.0 from the offset distribution.  Tried this a few times.
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 80 --gradient-offsets -3.0 -0.5 -0.4 -0.3 -0.2 -0.1 0.1 0.2 0.3 0.4 0.5 -M 20.0
+
+# Try it with fewer down turns
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 80 --gradient-offsets -3.0 -0.3 -0.2 -0.1 0.1 0.2 0.3 0.4 0.5 -M 20.0
+
+# Previous was ok.  I'll run multiple samples, but with a slightly smaller max step
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 80 --gradient-offsets -2.5 -0.3 -0.2 -0.1 0.1 0.2 0.3 0.4 0.5 -M 20.0
+
+# Previous was ok.  I'll run more samples. I will also bump up the zone heat % change margin since I have not seen any obvious cryo/jt issues and I'm mostly dropping the heat anyway.
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 10 --num-cavities 80 --gradient-offsets -2.5 -0.3 -0.2 -0.1 0.1 0.2 0.3 0.4 0.5 -M 25.0
+
+# Try the repair option again
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 10 --gradient-offsets -3 -0.2 -0.1 -M 25.0 -r
+
+# Run more samples like this
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 10 --gradient-offsets -3 -0.2 -0.1 -M 25.0 -r
+
+# Run more samples like this, but with more cavities being adjusted and an intermediate step size
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 5 --num-cavities 30 --gradient-offsets -3.0 -2.0 -1.0 -0.2 -0.1 -M 25.0 -r
+
+# Try focusing on the C100s again for a last hurrah.  Bigger max step though
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 1 --num-cavities 38 --gradient-offsets -5 -0.5 -0.2 -0.1 -0.05  --linac-zones 2L22 2L23 2L24 2L25 2L26 -M 25.0
+
+# Do the same thing with lots of samples.  Many of them will fail do to heat change.  Bump that up a little more since I don't see any obvious problems yet
+bin/fe_daq.bash -l SouthLinac random_sample_gradient_scan --settle-time 0 --average-time 3 --num-samples 10 --num-cavities 38 --gradient-offsets -5 -0.5 -0.2 -0.1 -0.05  --linac-zones 2L22 2L23 2L24 2L25 2L26 -M 30.0
+
+# I want to try a quick gradient scan on the C100s
+bin/fe_daq.bash -l SouthLinac simple_gradient_scan --settle-time 0 --average-time 0 --step-size 0.25 --num-steps 4 --linac-zones 2L22 2L23 2L24 2L25 2L26
+
+# Died on 2L26 due to heater margin.  Redo the last
+bin/fe_daq.bash -l SouthLinac simple_gradient_scan --settle-time 0 --average-time 0 --step-size 0.25 --num-steps 4 --linac-zones 2L26
