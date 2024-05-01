@@ -17,7 +17,7 @@ record(ai, "adamc:CAPHTRMGN") {
 }
 
 # South Linac heater margin
-record(ai, "adamc:CAPHTR2MGN") {
+record(ai, "adamc:CAP2HTRMGN") {
     field(VAL, 15)
     field(PINI, "YES")
 }

@@ -14,6 +14,13 @@ dbLoadRecords("../db/ndx.db", "D1=INX1L22,D2=INX1L23,E=NDX1L22")
 dbLoadRecords("../db/ndx.db", "D1=INX1L24,D2=INX1L25,E=NDX1L24")
 dbLoadRecords("../db/ndx.db", "D1=INX1L26,D2=INX1L27,E=NDX1L26")
 dbLoadRecords("../db/ndx.db", "D1=INX1S01,D2=INX1S02,E=NDX1S01")
+# SL NDX PVs
+dbLoadRecords("../db/ndx.db", "D1=INX2L04,D2=INX2L05,E=NDX2L04")
+dbLoadRecords("../db/ndx.db", "D1=INX2L06,D2=INX2L07,E=NDX2L07")
+dbLoadRecords("../db/ndx.db", "D1=INX2L08,D2=INX2L09,E=NDX2L08")
+dbLoadRecords("../db/ndx.db", "D1=INX2L10,D2=INX2L11,E=NDX2L10")
+dbLoadRecords("../db/ndx.db", "D1=INX2L16,D2=INX2L17,E=NDX2L17")
+# INX2L21 doesn't exist
 dbLoadRecords("../db/ndx.db", "D1=INX2L22,D2=INX2L23,E=NDX2L22")
 dbLoadRecords("../db/ndx.db", "D1=INX2L24,D2=INX2L25,E=NDX2L24")
 dbLoadRecords("../db/ndx.db", "D1=INX2L26,D2=INX2L27,E=NDX2L26")
