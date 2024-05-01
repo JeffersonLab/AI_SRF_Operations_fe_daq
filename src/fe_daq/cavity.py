@@ -954,10 +954,20 @@ class LLRF3Cavity(Cavity):
 
 
 def collect_data_at_gradients(cavs: List[Cavity], new_gsets: Dict[str, float], old_gsets: Dict[str, float],
-                              settle_time: float, avg_time: float, file: TextIO):
+                              settle_time: float, avg_time: float, file: TextIO, max_delay: Optional[float] = None):
     """This method changes the gradient settings, writes data to the index, and rolls back gradient changes.
 
     Users are prompted should something go wrong.  UserScanAbort is raised if user requests we abort the entire scan.
+
+    Args:
+        cavs: A list of cavity objects to update gradients on
+        new_gsets: A dictionary of new gsets keyed on cavity names.
+        old_gsets: A dictionary of the current gsets keyed on cavity names.
+        settle_time: How long to wait after gradients have been achieved for the system to settle in seconds
+        avg_time: How long to wait for data collection to occur in seconds
+        file: Object to write output to
+        max_delay: The maximum random delay in seconds to apply to a cavity before starting gradient changes.  Drawn
+                   from random uniform(0, max_delay).  If None, no delay is applied.
 
     Returns the final status
     """
@@ -965,7 +975,7 @@ def collect_data_at_gradients(cavs: List[Cavity], new_gsets: Dict[str, float], o
     while status != Status.SUCCESS:
         logger.info("Attempting cavity updates.")
         status, failed = update_cavity_gsets_parallel(cavs=cavs, new_gsets=new_gsets, settle=0,
-                                                      force=True)
+                                                      force=True, max_delay=max_delay)
         if status != Status.SUCCESS:
             logger.warning(f"{len(failed)} cavities had problems updating")
             status = update_gsets_failure_prompt(failed=failed)
@@ -990,7 +1000,7 @@ def collect_data_at_gradients(cavs: List[Cavity], new_gsets: Dict[str, float], o
     while status != Status.SUCCESS:
         logger.info("Attempting cavity gradient rollback.")
         status, failed = update_cavity_gsets_parallel(cavs=cavs, new_gsets=old_gsets, settle=0,
-                                                      force=True)
+                                                      force=True, max_delay=max_delay)
         logger.warning(f"Update status = {status}")
         if status != Status.SUCCESS:
             retry = user_alert_scan_paused("Rollback Failed.  Try again?")
@@ -1002,13 +1012,16 @@ def collect_data_at_gradients(cavs: List[Cavity], new_gsets: Dict[str, float], o
             #     raise UserScanAbort("Aborting after error rolling back gradient changes.")
 
 
-def update_cavity_gset(cavity: Cavity, gset: float, settle: float, force: bool, interactive: bool) -> bool:
+def update_cavity_gset(cavity: Cavity, gset: float, settle: float, force: bool, interactive: bool,
+                       max_delay: Optional[float] = None) -> bool:
     """Update a cavity and return true/false based on success/error."""
 
     success = False
     try:
         # Since we're setting multiple cavities, we will enforce a single common settle time after
         # all are set.
+        if max_delay is not None and max_delay > 0:
+            time.sleep(np.random.uniform(0, max_delay))
         cavity.set_gradient(gset=gset, settle_time=settle, force=force, interactive=interactive)
         success = True
     except UserScanAbort:
@@ -1020,7 +1033,7 @@ def update_cavity_gset(cavity: Cavity, gset: float, settle: float, force: bool, 
 
 
 def update_cavity_gsets_parallel(cavs: List[Cavity], new_gsets: Dict[str, float], settle: float,
-                                 force: bool) -> Tuple[Status, List[Cavity]]:
+                                 force: bool, max_delay: Optional[float] = None) -> Tuple[Status, List[Cavity]]:
     """Update cavity gradients in parallel.  Return True if data should be collected."""
     time.sleep(0.1)
     status = Status.FAIL
@@ -1032,7 +1045,8 @@ def update_cavity_gsets_parallel(cavs: List[Cavity], new_gsets: Dict[str, float]
             futures = {}
             for cav in cavs:
                 logger.debug(f"Submitting {cav.name} for parallel GSET update")
-                future = executor.submit(update_cavity_gset, cav, new_gsets[cav.name], settle, force, interactive)
+                future = executor.submit(update_cavity_gset, cav, new_gsets[cav.name], settle, force, interactive,
+                                         max_delay)
                 futures[future] = cav
 
             for future in concurrent.futures.as_completed(futures):

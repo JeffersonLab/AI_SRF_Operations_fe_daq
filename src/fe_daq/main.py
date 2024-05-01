@@ -118,6 +118,9 @@ def main() -> int:
     random_gradient.add_argument('-r', '--repair-samples', required=False, action='store_true',
                                  help="Attempt to repair samples by scaling gradients to produce the same linac energy",
                                  default=False)
+    random_gradient.add_argument('-d', '--max-delay', required=False, type=float,
+                                 help="The longest random delay to impose before changing a cavity's gradient",
+                                 default=20.0)
 
 
     try:
@@ -233,6 +236,7 @@ def main() -> int:
             gradient_offsets = args.gradient_offsets
             max_zone_heat_change = args.max_zone_heat_change
             data_file = os.path.join(log_dir, "random-sample-random-offset-scan.csv")
+            max_delay = args.max_delay
 
             # Setup the Linac, Zones, and Cavities
             logger.info(f"Creating linac {linac_name} with {zone_names}")
@@ -246,7 +250,7 @@ def main() -> int:
                                                                          settle_time=settle_time,
                                                                          offset_list=gradient_offsets,
                                                                          max_zone_heat_change=max_zone_heat_change,
-                                                                         repair=repair)
+                                                                         repair=repair, max_delay=max_delay)
             finally:
                 # Put the PSETs back where you found them.  If the user exits in the middle of the scan, we want to
                 # return PSETs no matter what.

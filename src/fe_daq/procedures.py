@@ -815,7 +815,8 @@ def run_simple_gradient_scan(linac: Linac, avg_time: float, data_file: str, step
 def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float, data_file: str, n_samples: int,
                                                   settle_time: float = 6.0, n_cavities: int = 10,
                                                   offset_list: Optional[List[float]] = None,
-                                                  max_zone_heat_change: float = 10.0, repair: bool = False) -> None:
+                                                  max_zone_heat_change: float = 10.0, repair: bool = False,
+                                                  max_delay: Optional[float] = None) -> None:
     """This randomly selects cavities and applies a random offset perturbation to gradients from their initial setting.
 
     At each iteration, n_cavities are selected to be perturbed.  Then each cavity's gradient is changed by a small
@@ -826,7 +827,20 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
     Note: The changes in gradient are not allowed to exceed the cavity's gset_max or gset_mix.
 
     Args:
-
+        linac: Linac object that is under study
+        avg_time: How long to pause at desired set points in seconds for data collection.  Note: originally data was
+                  intended to be averaged
+        data_file: Path to file where data lookup index is saved
+        n_samples: Number of samples (random offsets) to take
+        settle_time: How long to wait for systems to settle in seconds prior to starting data collection.
+        n_cavities: How many cavities to change per sample
+        offset_list: A collection of offsets which can be applied to a cavity's current gradient.  Offset chosen at
+                     random for each cavity from this list
+        max_zone_heat_change: Largest allowable absolute percent change in estimated cryomodule RF heat.
+        repair: Should all new gradients be scaled up to keep the linac segment energy gain constant between new and old
+                settings.  If true, gradients are scaled.  If false, gradients are unchanged after random offsets.
+        max_delay: The maximum delay in seconds to impose before starting each individual cavity change.  Actual delay
+                    imposed is randomly sampled from [0, max_delay].  If None, no delay is imposed.
     """
 
     logger.info(f"Starting random sample random offset gradient scan")
@@ -890,7 +904,7 @@ def run_random_sample_random_offset_gradient_scan(linac: Linac, avg_time: float,
 
                 # Do the updates, and track in the lookup index file.
                 collect_data_at_gradients(cavs=cavs, new_gsets=new_gsets, old_gsets=old_gsets,
-                                          settle_time=settle_time, avg_time=avg_time, file=f)
+                                          settle_time=settle_time, avg_time=avg_time, file=f, max_delay=max_delay)
 
             except UserScanAbort:
                 # Don't do anything if the user requested an abort.  Just need to bypass other exception handling at
